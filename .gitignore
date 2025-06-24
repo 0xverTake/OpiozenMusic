@@ -1,4 +1,9 @@
-# Fichiers de cache et temporaires
+# ======================================
+# OPIOZENMUSIC BOT - GITIGNORE
+# ======================================
+
+# ========== PYTHON ==========
+# Fichiers de cache et bytecode
 __pycache__/
 *.py[cod]
 *$py.class
@@ -21,54 +26,190 @@ wheels/
 *.egg
 MANIFEST
 
-# Environnement virtuel
+# ========== ENVIRONNEMENT VIRTUEL ==========
 venv/
 ENV/
 env/
 .venv/
+.virtualenv/
+pipenv/
 
-# Variables d'environnement
+# ========== VARIABLES D'ENVIRONNEMENT ==========
+# Fichiers de configuration sensibles
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
+*.env
+config.json
+secrets.json
+credentials.json
 
-# Logs
+# ========== SPOTIFY & API KEYS ==========
+# Tokens et clés API
+spotify_token.json
+spotify_cache.json
+*.token
+*.key
+*.secret
+
+# ========== LOGS ==========
+# Fichiers de logs
 *.log
 logs/
+log/
+*.log.*
+debug.log
+error.log
+access.log
+nohup.out
 
-# Fichiers de configuration IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Fichiers audio téléchargés
+# ========== FICHIERS AUDIO ==========
+# Fichiers audio téléchargés par yt-dlp
 *.webm
 *.mp4
 *.mp3
 *.m4a
 *.wav
 *.ogg
+*.flac
+*.aac
+*.opus
+*.wma
 
-# Fichiers de métadonnées yt-dlp
+# ========== MÉTADONNÉES YT-DLP ==========
+# Fichiers de métadonnées
 *.info.json
 *.description
 *.annotations.xml
+*.thumbnail
+*.subtitles
+*.srt
+*.vtt
+*.ass
 
-# Fichiers système
-.DS_Store
+# ========== FICHIERS SYSTÈME ==========
+# Windows
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+$RECYCLE.BIN/
+*.lnk
 
-# Fichiers de sauvegarde
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# ========== IDE & ÉDITEURS ==========
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# PyCharm
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+.netrwhist
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+
+# ========== FICHIERS DE SAUVEGARDE ==========
 *.bak
 *.backup
 *.old
-
-# Fichiers temporaires
+*.orig
 *.tmp
 *.temp
+*_backup
+*_old
+
+# ========== DÉPLOIEMENT ==========
+# Fichiers de déploiement locaux
+deploy_config.json
+.deploy/
+deployment_keys/
+*.pem
+*.ppk
+private_key*
+
+# ========== FICHIERS TEMPORAIRES ==========
+# Fichiers temporaires générés
+*.tmp
+*.temp
+temp/
+tmp/
+cache/
+.cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ========== DONNÉES UTILISATEUR ==========
+# Données et configurations utilisateur
+user_data/
+playlists/
+favorites/
+history/
+queue_backup.json
+
+# ========== PROCESSUS ==========  
+# Fichiers de processus
+*.pid
+*.lock
+.running
+
+# ========== CERTIFICATS ==========
+# Certificats SSL/TLS
+*.crt
+*.cert
+*.pem
+*.p12
+*.pfx
+
+# ========== BASE DE DONNÉES ==========
+# Fichiers de base de données
+*.db
+*.sqlite
+*.sqlite3
+database/
+db_backup/
+
+# ========== ARCHIVES ==========
+# Archives et compressions
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.7z
+*.bz2
+*.xz
+
+# ========== DOCUMENTATION GÉNÉRÉE ==========
+# Documentation auto-générée
+docs/_build/
+site/
+_site/

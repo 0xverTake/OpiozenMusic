@@ -4,7 +4,7 @@ Un bot Discord de musique complet conçu pour fonctionner sur Raspberry Pi 4 et 
 
 ## 🌟 Fonctionnalités
 
-- 🎵 Lecture de musique depuis YouTube
+- 🎵 **Multi-plateformes** : YouTube, SoundCloud, Spotify
 - 📝 Système de queue avec répétition
 - 🔊 Contrôle du volume
 - ⏸️ Pause/Reprendre
@@ -13,6 +13,32 @@ Un bot Discord de musique complet conçu pour fonctionner sur Raspberry Pi 4 et 
 - 📊 Affichage des informations de lecture
 - 🎨 Interface avec embeds Discord élégants
 - 🔄 Service systemd pour fonctionnement en arrière-plan
+- 🔍 Recherche intelligente et détection automatique des plateformes
+- 🎶 Support Spotify avec conversion automatique vers YouTube
+
+## 🎵 Plateformes Supportées
+
+### 🎥 YouTube
+- ✅ Liens directs YouTube
+- ✅ Recherche textuelle
+- ✅ Playlistes (premier élément)
+- ✅ Gestion des restrictions anti-bot
+
+### 🎵 SoundCloud  
+- ✅ Liens directs SoundCloud
+- ✅ Pistes publiques
+- ✅ Support natif via yt-dlp
+
+### 🎶 Spotify
+- ✅ Liens de pistes Spotify
+- ✅ Conversion automatique vers YouTube
+- ✅ Extraction des métadonnées (artiste, titre)
+- ⚙️ Configuration optionnelle requise
+
+### 🔍 Recherche Intelligente
+- ✅ Recherche textuelle automatique
+- ✅ Détection automatique des plateformes
+- ✅ Formats flexibles (`artiste - titre`, `titre seul`)
 
 ## 🛠️ Installation
 
@@ -70,64 +96,66 @@ Créez le fichier `.env` :
 echo "DISCORD_TOKEN=votre_token_ici" > .env
 ```
 
-3. **Déployez le bot comme service systemd**
+#### Configuration Spotify (Optionnelle)
+
+Pour activer le support Spotify :
+
+1. **Créez une application Spotify** :
+   - Allez sur https://developer.spotify.com/dashboard/
+   - Créez une nouvelle app
+   - Notez votre `Client ID` et `Client Secret`
+
+2. **Ajoutez les credentials à votre .env** :
 ```bash
-chmod +x deploy-debian.sh
-./deploy-debian.sh
+echo "SPOTIFY_CLIENT_ID=votre_client_id" >> .env
+echo "SPOTIFY_CLIENT_SECRET=votre_client_secret" >> .env
 ```
 
-Le bot sera automatiquement configuré pour :
-- ✅ Démarrer automatiquement au boot du système
-- ✅ Redémarrer automatiquement en cas de crash
-- ✅ Fonctionner en arrière-plan (même après fermeture SSH)
-- ✅ Enregistrer les logs système
+## 🚀 **Déploiement Ultra-Simple**
 
-#### Gestion du service
+### 🐍 **Nouveau : Gestionnaire Python Unifié**
 
-Utilisez le script de gestion pour contrôler le bot :
+Un seul script Python gère maintenant **tout** !
+
+#### **Installation et déploiement en 1 clic :**
 
 ```bash
-chmod +x service-manager.sh
+# Cloner le projet
+git clone <votre-repo> OpiozenMusic
+cd OpiozenMusic
 
-# Démarrer le service
-./service-manager.sh start
+# Lancer le gestionnaire (Windows)
+python start.py
 
-# Arrêter le service
-./service-manager.sh stop
+# Ou avec le script batch (Windows)
+start.bat
 
-# Redémarrer le service
-./service-manager.sh restart
-
-# Voir le statut
-./service-manager.sh status
-
-# Voir les logs en temps réel
-./service-manager.sh logs
-
-# Activer au démarrage
-./service-manager.sh enable
-
-# Désactiver au démarrage
-./service-manager.sh disable
+# Ou directement (Linux/Mac)
+python3 opiomanager.py
 ```
 
-#### Commandes systemd directes
+#### **Fonctionnalités du gestionnaire :**
 
-```bash
-# Statut du service
-sudo systemctl status opiozenmusic
+- 🚀 **Déploiement complet** - Installation complète sur VPS
+- ⚡ **Déploiement rapide** - Mise à jour rapide des fichiers essentiels  
+- 📊 **Monitoring** - Statut, logs en temps réel
+- 🔄 **Gestion** - Redémarrage, arrêt, diagnostics
+- 🔧 **Maintenance** - Mise à jour yt-dlp, édition .env
+- 🖥️ **SSH direct** - Connexion directe au VPS
 
-# Logs du service
-sudo journalctl -u opiozenmusic -f
+#### ✨ **Avantages du Gestionnaire Python :**
 
-# Redémarrer le service
-sudo systemctl restart opiozenmusic
+- 🎯 **Tout-en-un** - Un seul script pour tout gérer
+- 🌈 **Interface colorée** - Messages clairs et visuels
+- 🔧 **Multi-plateforme** - Fonctionne sur Windows, Linux, Mac
+- ⚡ **Ultra-rapide** - Déploiement en quelques clics
+- 🛡️ **Sécurisé** - Utilise SSH standard (pas de mots de passe stockés)
+- 📊 **Monitoring intégré** - Statut et logs en temps réel
+- 🔄 **Auto-détection** - Détecte automatiquement les problèmes
 
-# Arrêter le service
-sudo systemctl stop opiozenmusic
-```
+---
 
-### Installation manuelle
+## 🛠️ Installation Manuelle (Méthode Classique)
 
 1. **Mise à jour du système**
 ```bash

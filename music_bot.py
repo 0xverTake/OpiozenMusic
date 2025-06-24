@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+"""
+OpiozenMusic - Bot Discord de musique multi-plateformes
+Support: YouTube, SoundCloud, Spotify (avec contournement des restrictions)
+"""
+
 import discord
 from discord.ext import commands
 import yt_dlp
@@ -7,6 +13,16 @@ from dotenv import load_dotenv
 import logging
 from collections import deque
 import json
+import re
+import random
+import time
+import requests
+from urllib.parse import quote, unquote
+import subprocess
+import tempfile
+import re
+import spotipy
+from spotipy.oauth2 import SpotifyClientCredentials
 
 # Charger les variables d'environnement
 load_dotenv()
@@ -15,7 +31,7 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Configuration yt-dlp
+# Configuration yt-dlp avec support multi-plateformes
 ytdl_format_options = {
     'format': 'bestaudio/best',
     'outtmpl': '%(extractor)s-%(id)s-%(title)s.%(ext)s',
@@ -26,11 +42,35 @@ ytdl_format_options = {
     'logtostderr': False,
     'quiet': True,
     'no_warnings': True,
-    'default_search': 'auto',
+    'default_search': 'ytsearch',
     'source_address': '0.0.0.0',
     'extract_flat': False,
     'writethumbnail': False,
     'writeinfojson': False,
+    # Contournement des restrictions YouTube
+    'extractor_args': {
+        'youtube': {
+            'skip': ['hls', 'dash'],
+            'player_skip': ['configs', 'webpage']
+        },
+        'soundcloud': {
+            'lazy_playlist': True
+        }
+    },
+    # Headers pour contourner la détection de bot
+    'http_headers': {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-us,en;q=0.5',
+        'Accept-Encoding': 'gzip,deflate',
+        'Accept-Charset': 'ISO-8859-1,utf-8;q=0.7,*;q=0.7',
+        'Connection': 'close'
+    },
+    # Support des cookies pour l'authentification
+    'cookiefile': None,
+    # Tentative d'authentification automatique
+    'username': 'oauth2',
+    'password': '',
 }
 
 ffmpeg_options = {
@@ -51,20 +91,129 @@ class YTDLSource(discord.PCMVolumeTransformer):
         self.uploader = data.get('uploader')
 
     @classmethod
-    async def from_url(cls, url, *, loop=None, stream=False):
+    async def from_url(cls, url_or_query, *, loop=None, stream=False):
         loop = loop or asyncio.get_event_loop()
-        try:
-            data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
-            
-            if 'entries' in data:
-                # Prendre la première entrée si c'est une playlist
-                data = data['entries'][0]
-            
-            filename = data['url'] if stream else ytdl.prepare_filename(data)
-            return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
-        except Exception as e:
-            logger.error(f"Erreur lors de l'extraction de l'URL {url}: {e}")
-            raise
+        
+        # Détecter la plateforme
+        platform = detect_platform(url_or_query)
+        logger.info(f"Plateforme détectée: {platform} pour {url_or_query}")
+        
+        # Traitement spécial pour Spotify
+        if platform == 'spotify':
+            try:
+                spotify_info = get_spotify_track_info(url_or_query)
+                # Rechercher sur YouTube avec les informations Spotify
+                search_query = f"ytsearch:{spotify_info['search_query']}"
+                return await cls._extract_from_query(search_query, loop, stream, spotify_info)
+            except Exception as e:
+                logger.error(f"Erreur Spotify: {e}")
+                raise Exception(f"🎵 Erreur Spotify: {str(e)}")
+        
+        # Pour YouTube, SoundCloud et recherches
+        elif platform in ['youtube', 'soundcloud']:
+            return await cls._extract_from_query(url_or_query, loop, stream)
+        
+        # Pour les recherches textuelles
+        else:
+            search_query = f"ytsearch:{url_or_query}"
+            return await cls._extract_from_query(search_query, loop, stream)
+    
+    @classmethod
+    async def _extract_from_query(cls, query, loop, stream, spotify_info=None):
+        """Extraire l'audio depuis une requête/URL"""
+        
+        # Configuration alternative pour les problèmes YouTube
+        alternative_options = ytdl_format_options.copy()
+        alternative_options.update({
+            'format': 'worst[abr>0]/worst/best[height<=480]',
+            'extractaudio': True,
+            'audioformat': 'mp3',
+            'outtmpl': '%(extractor)s-%(id)s-%(title)s.%(ext)s',
+            'restrictfilenames': True,
+            'noplaylist': True,
+            'ignoreerrors': True,
+            'quiet': True,
+            'no_warnings': True,
+            'cookiefile': None,
+            'extract_flat': False,
+            'writethumbnail': False,
+            'writeinfojson': False,
+            'age_limit': None,
+            'extractor_args': {
+                'youtube': {
+                    'skip': ['dash', 'hls'],
+                    'player_skip': ['js', 'configs', 'webpage'],
+                    'comment_sort': ['top'],
+                    'max_comments': [0]
+                },
+                'soundcloud': {
+                    'lazy_playlist': True
+                }
+            }
+        })
+        
+        # Configuration spéciale pour SoundCloud
+        soundcloud_options = ytdl_format_options.copy()
+        soundcloud_options.update({
+            'format': 'best',
+            'noplaylist': True,
+            'extract_flat': False,
+        })
+        
+        # Tentatives multiples avec différentes configurations
+        attempts = [
+            (ytdl, "Configuration standard"),
+            (yt_dlp.YoutubeDL(alternative_options), "Configuration alternative"),
+        ]
+        
+        # Ajouter la configuration SoundCloud si nécessaire
+        if 'soundcloud.com' in query.lower():
+            attempts.insert(1, (yt_dlp.YoutubeDL(soundcloud_options), "Configuration SoundCloud"))
+        
+        last_error = None
+        
+        for ytdl_instance, config_name in attempts:
+            try:
+                logger.info(f"Tentative d'extraction avec {config_name}")
+                data = await loop.run_in_executor(None, lambda: ytdl_instance.extract_info(query, download=not stream))
+                
+                if 'entries' in data:
+                    # Prendre la première entrée si c'est une playlist
+                    data = data['entries'][0]
+                
+                if not data:
+                    continue
+                
+                # Ajouter les informations Spotify si disponibles
+                if spotify_info:
+                    data['spotify_info'] = spotify_info
+                    data['platform'] = 'spotify'
+                    
+                filename = data['url'] if stream else ytdl_instance.prepare_filename(data)
+                logger.info(f"Extraction réussie avec {config_name}: {data.get('title', 'Titre inconnu')}")
+                return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
+                
+            except Exception as e:
+                last_error = e
+                logger.warning(f"Échec avec {config_name}: {str(e)}")
+                continue
+        
+        # Si toutes les tentatives échouent
+        error_msg = f"Impossible d'extraire l'audio de {query}"
+        if last_error:
+            if "Sign in to confirm you're not a bot" in str(last_error):
+                error_msg = "🤖 YouTube détecte une activité de bot. Essayez avec un autre lien ou réessayez plus tard."
+            elif "Video unavailable" in str(last_error):
+                error_msg = "❌ Cette vidéo n'est pas disponible (privée, supprimée ou restreinte géographiquement)."
+            elif "This video is not available" in str(last_error):
+                error_msg = "❌ Cette vidéo n'est pas accessible dans votre région."
+            elif "soundcloud" in query.lower() and "not found" in str(last_error).lower():
+                error_msg = "❌ Cette piste SoundCloud n'est pas disponible ou a été supprimée."
+            else:
+                error_msg = f"❌ Erreur lors de l'extraction: {str(last_error)}"
+        
+        logger.error(error_msg)
+        raise Exception(error_msg)
 
 class MusicPlayer:
     def __init__(self, ctx):
@@ -203,8 +352,7 @@ async def play(ctx, *, query):
     """Jouer une chanson depuis YouTube"""
     if not ctx.author.voice:
         await ctx.send("❌ Vous devez être dans un canal vocal pour utiliser cette commande!")
-        return
-    
+        return    
     voice_channel = ctx.author.voice.channel
     player = bot.get_player(ctx)
     
@@ -218,15 +366,35 @@ async def play(ctx, *, query):
         # Extraire les informations de la vidéo
         source = await YTDLSource.from_url(query, loop=bot.loop, stream=True)
         
+        # Détecter la plateforme pour l'affichage
+        platform = detect_platform(query)
+        platform_emoji = {
+            'youtube': '🎥',
+            'soundcloud': '🎵',
+            'spotify': '🎶',
+            'search': '🔍'
+        }.get(platform, '🎵')
+        
         if player.is_playing:
             # Ajouter à la queue
             player.add_to_queue(source)
             embed = discord.Embed(
                 title="📝 Ajouté à la queue",
-                description=f"**{source.title}**",
+                description=f"{platform_emoji} **{source.title}**",
                 color=discord.Color.green()
             )
             embed.add_field(name="Position", value=len(player.queue), inline=True)
+            if source.duration:
+                embed.add_field(name="Durée", value=f"{source.duration // 60}:{source.duration % 60:02d}", inline=True)
+            
+            # Afficher la plateforme source
+            if hasattr(source.data, 'spotify_info'):
+                embed.add_field(name="Source", value="Spotify → YouTube", inline=True)
+            elif platform == 'soundcloud':
+                embed.add_field(name="Source", value="SoundCloud", inline=True)
+            elif platform == 'youtube':
+                embed.add_field(name="Source", value="YouTube", inline=True)
+            
             await loading_msg.edit(content="", embed=embed)
         else:
             # Jouer immédiatement
@@ -235,7 +403,73 @@ async def play(ctx, *, query):
             await loading_msg.delete()
     
     except Exception as e:
-        await loading_msg.edit(content=f"❌ Erreur lors de la lecture: {str(e)}")
+        error_msg = str(e)
+        
+        # Messages d'erreur personnalisés
+        if "🎵 Erreur Spotify" in error_msg:
+            embed = discord.Embed(
+                title="🎶 Erreur Spotify",
+                description="Problème avec le lien Spotify.",
+                color=discord.Color.red()
+            )
+            embed.add_field(
+                name="💡 Solutions",
+                value="• Vérifiez que le lien Spotify est correct\n• Configurez les credentials Spotify dans .env\n• Essayez de copier le titre et l'artiste manuellement",
+                inline=False
+            )
+            embed.add_field(name="Détails", value=error_msg, inline=False)
+            await loading_msg.edit(content="", embed=embed)
+        elif "Sign in to confirm you're not a bot" in error_msg:
+            embed = discord.Embed(
+                title="🤖 Restriction YouTube",
+                description="YouTube a détecté une activité de bot. Voici quelques solutions:",
+                color=discord.Color.orange()  
+            )
+            embed.add_field(
+                name="💡 Solutions",
+                value="• Essayez avec un autre lien\n• Réessayez dans quelques minutes\n• Utilisez un lien plus court\n• Essayez avec SoundCloud",
+                inline=False
+            )
+            embed.add_field(
+                name="🔄 Mise à jour",
+                value="Tapez `!update` pour mettre à jour yt-dlp",
+                inline=False
+            )
+            await loading_msg.edit(content="", embed=embed)
+        elif "SoundCloud" in error_msg:
+            embed = discord.Embed(
+                title="🎵 Erreur SoundCloud",
+                description="Problème avec le lien SoundCloud.",
+                color=discord.Color.orange()
+            )
+            embed.add_field(
+                name="Causes possibles",
+                value="• Piste privée ou supprimée\n• Limitation géographique\n• Problème de réseau",
+                inline=False
+            )
+            await loading_msg.edit(content="", embed=embed)
+        elif "Video unavailable" in error_msg or "not available" in error_msg:
+            embed = discord.Embed(
+                title="❌ Contenu indisponible",
+                description="Ce contenu n'est pas accessible.",
+                color=discord.Color.red()
+            )
+            embed.add_field(
+                name="Causes possibles",
+                value="• Contenu privé ou supprimé\n• Restriction géographique\n• Problème de droits d'auteur",
+                inline=False
+            )
+            await loading_msg.edit(content="", embed=embed)
+        else:
+            embed = discord.Embed(
+                title="❌ Erreur de lecture",
+                description=f"Impossible de lire ce contenu.",
+                color=discord.Color.red()
+            )
+            embed.add_field(name="Détails", value=f"```{error_msg[:1000]}```", inline=False)
+            await loading_msg.edit(content="", embed=embed)
+        
+        logger.error(f"Erreur lors de la lecture de {query}: {error_msg}")
 
 @bot.command(name='pause')
 async def pause(ctx):
@@ -394,29 +628,207 @@ async def help_command(ctx):
     """Afficher les commandes disponibles"""
     embed = discord.Embed(
         title="🎵 OpiozenMusic - Commandes",
-        description="Bot de musique Discord sans API externe",
+        description="Bot de musique multi-plateformes pour Discord",
         color=discord.Color.blue()
     )
     
-    commands_list = [
-        ("!play <recherche>", "Jouer une chanson depuis YouTube"),
-        ("!pause", "Mettre en pause la lecture"),
-        ("!resume", "Reprendre la lecture"),
-        ("!stop", "Arrêter la lecture et vider la queue"),
-        ("!skip", "Passer à la chanson suivante"),
-        ("!queue", "Afficher la queue de lecture"),
-        ("!volume <0-100>", "Changer le volume"),
-        ("!loop", "Répéter la chanson actuelle"),
-        ("!loopqueue", "Répéter la queue"),
-        ("!nowplaying", "Informations sur la chanson actuelle"),
-        ("!disconnect", "Déconnecter le bot"),
-    ]
+    # Commandes principales
+    embed.add_field(
+        name="🎵 Lecture",
+        value="• `!play <lien/recherche>` - Jouer depuis YouTube/SoundCloud/Spotify\n• `!pause` - Mettre en pause\n• `!resume` - Reprendre\n• `!stop` - Arrêter et vider la queue\n• `!skip` - Passer à la suivante",
+        inline=False
+    )
     
-    for command, description in commands_list:
-        embed.add_field(name=command, value=description, inline=False)
+    embed.add_field(
+        name="📝 Queue & Info",
+        value="• `!queue` - Afficher la file d'attente\n• `!nowplaying` - Chanson actuelle\n• `!volume <0-100>` - Régler le volume",
+        inline=False
+    )
     
-    embed.set_footer(text="Créé pour Raspberry Pi 4 | Aucune API externe requise")
+    embed.add_field(
+        name="🔄 Répétition",
+        value="• `!loop` - Répéter la chanson actuelle\n• `!loopqueue` - Répéter toute la queue",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="🔧 Utilitaires",
+        value="• `!platforms` - Plateformes supportées\n• `!update` - Mettre à jour yt-dlp (admin)\n• `!disconnect` - Déconnecter le bot",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="🎯 Plateformes supportées",
+        value="🎥 YouTube • 🎵 SoundCloud • 🎶 Spotify • 🔍 Recherche textuelle",
+        inline=False
+    )
+    
+    embed.set_footer(text="Support multi-plateformes | Aucune API externe requise (sauf Spotify optionnel)")
     await ctx.send(embed=embed)
+
+@bot.command(name='update')
+async def update_ytdlp(ctx):
+    """Mettre à jour yt-dlp pour résoudre les problèmes YouTube"""
+    # Vérifier si l'utilisateur est administrateur
+    if not ctx.author.guild_permissions.administrator:
+        await ctx.send("❌ Seuls les administrateurs peuvent utiliser cette commande.")
+        return
+    
+    loading_msg = await ctx.send("🔄 Mise à jour de yt-dlp en cours...")
+    
+    try:
+        import subprocess
+        import sys
+        
+        # Mise à jour de yt-dlp
+        result = subprocess.run([
+            sys.executable, '-m', 'pip', 'install', '--upgrade', 'yt-dlp'
+        ], capture_output=True, text=True, timeout=60)
+        
+        if result.returncode == 0:
+            # Redémarrer le module yt-dlp
+            import importlib
+            import yt_dlp
+            importlib.reload(yt_dlp)
+            
+            # Recréer l'instance ytdl avec les nouvelles configs
+            global ytdl
+            ytdl = yt_dlp.YoutubeDL(ytdl_format_options)
+            
+            embed = discord.Embed(
+                title="✅ Mise à jour réussie",
+                description="yt-dlp a été mis à jour avec succès",
+                color=discord.Color.green()
+            )
+            embed.add_field(
+                name="🔄 Redémarrage recommandé",
+                value="Pour une meilleure stabilité, redémarrez le bot avec:\n`sudo systemctl restart opiozenmusic`",
+                inline=False
+            )
+            await loading_msg.edit(content="", embed=embed)
+        else:
+            await loading_msg.edit(content=f"❌ Échec de la mise à jour: {result.stderr}")
+            
+    except subprocess.TimeoutExpired:
+        await loading_msg.edit(content="⏱️ Mise à jour timeout - Réessayez plus tard")
+    except Exception as e:
+        await loading_msg.edit(content=f"❌ Erreur lors de la mise à jour: {str(e)}")
+
+@bot.command(name='platforms', aliases=['sources'])
+async def supported_platforms(ctx):
+    """Afficher les plateformes supportées"""
+    embed = discord.Embed(
+        title="🎵 Plateformes Supportées",
+        description="OpiozenMusic supporte plusieurs plateformes de musique",
+        color=discord.Color.blue()
+    )
+    
+    embed.add_field(
+        name="🎥 YouTube",
+        value="• Liens directs\n• Recherche textuelle\n• Playlistes (premier élément)",
+        inline=True
+    )
+    
+    embed.add_field(
+        name="🎵 SoundCloud",
+        value="• Liens directs SoundCloud\n• Pistes publiques\n• Support natif",
+        inline=True
+    )
+    
+    embed.add_field(
+        name="🎶 Spotify",
+        value="• Liens de pistes Spotify\n• Conversion vers YouTube\n• Nécessite configuration",
+        inline=True
+    )
+    
+    embed.add_field(
+        name="🔍 Recherche",
+        value="• Tapez simplement le nom\n• Recherche automatique sur YouTube\n• Format: `artiste - titre`",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="⚙️ Configuration Spotify (Optionnelle)",
+        value="Ajoutez dans votre `.env`:\n```\nSPOTIFY_CLIENT_ID=votre_id\nSPOTIFY_CLIENT_SECRET=votre_secret\n```",
+        inline=False
+    )
+    
+    embed.add_field(
+        name="📖 Exemples d'utilisation",
+        value="• `!play https://youtube.com/watch?v=...`\n• `!play https://soundcloud.com/...`\n• `!play https://open.spotify.com/track/...`\n• `!play Imagine Dragons Believer`",
+        inline=False
+    )
+    
+    await ctx.send(embed=embed)
+
+# Fonction utilitaire pour détecter le type de plateforme
+def detect_platform(url_or_query):
+    """Détecter la plateforme de musique depuis l'URL ou la requête"""
+    url_lower = url_or_query.lower()
+    
+    if 'youtube.com' in url_lower or 'youtu.be' in url_lower:
+        return 'youtube'
+    elif 'soundcloud.com' in url_lower:
+        return 'soundcloud'
+    elif 'spotify.com' in url_lower:
+        return 'spotify'
+    elif 'open.spotify.com' in url_lower:
+        return 'spotify'
+    else:
+        # Si c'est juste du texte, c'est probablement une recherche
+        return 'search'
+
+# Configuration Spotify (optionnelle)
+def setup_spotify():
+    """Configuration du client Spotify si les credentials sont disponibles"""
+    client_id = os.getenv('SPOTIFY_CLIENT_ID')
+    client_secret = os.getenv('SPOTIFY_CLIENT_SECRET')
+    
+    if client_id and client_secret:
+        try:
+            client_credentials_manager = SpotifyClientCredentials(
+                client_id=client_id, 
+                client_secret=client_secret
+            )
+            return spotipy.Spotify(client_credentials_manager=client_credentials_manager)
+        except Exception as e:
+            logger.warning(f"Impossible d'initialiser Spotify: {e}")
+            return None
+    return None
+
+# Initialiser le client Spotify
+spotify_client = setup_spotify()
+
+def get_spotify_track_info(spotify_url):
+    """Récupérer les informations d'une piste Spotify"""
+    if not spotify_client:
+        raise Exception("Client Spotify non configuré. Ajoutez SPOTIFY_CLIENT_ID et SPOTIFY_CLIENT_SECRET à votre .env")
+    
+    # Extraire l'ID de la piste depuis l'URL
+    track_id_match = re.search(r'track/([a-zA-Z0-9]+)', spotify_url)
+    if not track_id_match:
+        raise Exception("URL Spotify invalide")
+    
+    track_id = track_id_match.group(1)
+    
+    try:
+        track = spotify_client.track(track_id)
+        artist_name = track['artists'][0]['name']
+        track_name = track['name']
+        duration_ms = track['duration_ms']
+        
+        # Créer une requête de recherche pour YouTube
+        search_query = f"{artist_name} - {track_name}"
+        
+        return {
+            'search_query': search_query,
+            'title': f"{artist_name} - {track_name}",
+            'artist': artist_name,
+            'duration': duration_ms // 1000,
+            'platform': 'spotify'
+        }
+    except Exception as e:
+        raise Exception(f"Erreur lors de la récupération des informations Spotify: {e}")
 
 # Gestion des erreurs
 @bot.event
