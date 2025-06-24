@@ -2,6 +2,8 @@
 """
 OpiozenMusic - Bot Discord de musique multi-plateformes
 Support: YouTube, SoundCloud, Spotify (avec contournement des restrictions)
+Auteur: Assistant IA
+Version: 2.0 - Corrigée et optimisée
 """
 
 import discord
@@ -20,7 +22,6 @@ import requests
 from urllib.parse import quote, unquote
 import subprocess
 import tempfile
-import re
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 
@@ -81,46 +82,54 @@ ffmpeg_options = {
 ytdl = yt_dlp.YoutubeDL(ytdl_format_options)
 
 class YTDLSource(discord.PCMVolumeTransformer):
+    """Source audio avec support multi-plateformes"""
+    
     def __init__(self, source, *, data, volume=0.5):
         super().__init__(source, volume)
         self.data = data
-        self.title = data.get('title')
-        self.url = data.get('url')
-        self.duration = data.get('duration')
-        self.thumbnail = data.get('thumbnail')
-        self.uploader = data.get('uploader')
+        self.title = data.get('title', 'Titre inconnu')
+        self.url = data.get('url', '')
+        self.duration = data.get('duration', 0)
+        self.thumbnail = data.get('thumbnail', '')
+        self.uploader = data.get('uploader', '')
 
     @classmethod
     async def from_url(cls, url_or_query, *, loop=None, stream=False):
+        """Créer une source audio depuis une URL ou une requête"""
         loop = loop or asyncio.get_event_loop()
         
-        # Détecter la plateforme
-        platform = detect_platform(url_or_query)
-        logger.info(f"Plateforme détectée: {platform} pour {url_or_query}")
-        
-        # Traitement spécial pour Spotify
-        if platform == 'spotify':
-            try:
-                spotify_info = get_spotify_track_info(url_or_query)
-                # Rechercher sur YouTube avec les informations Spotify
-                search_query = f"ytsearch:{spotify_info['search_query']}"
-                return await cls._extract_from_query(search_query, loop, stream, spotify_info)
-            except Exception as e:
-                logger.error(f"Erreur Spotify: {e}")
-                raise Exception(f"🎵 Erreur Spotify: {str(e)}")
-        
-        # Pour YouTube, SoundCloud et recherches
-        elif platform in ['youtube', 'soundcloud']:
-            return await cls._extract_from_query(url_or_query, loop, stream)
-        
-        # Pour les recherches textuelles
-        else:
-            search_query = f"ytsearch:{url_or_query}"
-            return await cls._extract_from_query(search_query, loop, stream)
+        try:
+            # Détecter la plateforme
+            platform = detect_platform(url_or_query)
+            logger.info(f"Plateforme détectée: {platform} pour {url_or_query}")
+            
+            # Traitement spécial pour Spotify
+            if platform == 'spotify':
+                try:
+                    spotify_info = get_spotify_track_info(url_or_query)
+                    # Rechercher sur YouTube avec les informations Spotify
+                    search_query = f"ytsearch:{spotify_info['search_query']}"
+                    return await cls._extract_from_query(search_query, loop, stream, spotify_info)
+                except Exception as e:
+                    logger.error(f"Erreur Spotify: {e}")
+                    raise Exception(f"🎵 Erreur Spotify: {str(e)}")
+            
+            # Pour YouTube, SoundCloud et recherches
+            elif platform in ['youtube', 'soundcloud']:
+                return await cls._extract_from_query(url_or_query, loop, stream)
+            
+            # Pour les recherches textuelles
+            else:
+                search_query = f"ytsearch:{url_or_query}"
+                return await cls._extract_from_query(search_query, loop, stream)
+                
+        except Exception as e:
+            logger.error(f"Erreur dans from_url: {e}")
+            raise e
     
     @classmethod
     async def _extract_from_query(cls, query, loop, stream, spotify_info=None):
-        """Extraire l'audio depuis une requête/URL"""
+        """Extraire l'audio depuis une requête/URL avec gestion d'erreurs robuste"""
         
         # Configuration alternative pour les problèmes YouTube
         alternative_options = ytdl_format_options.copy()
@@ -167,7 +176,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
         ]
         
         # Ajouter la configuration SoundCloud si nécessaire
-        if 'soundcloud.com' in query.lower():
+        if query and 'soundcloud.com' in query.lower():
             attempts.insert(1, (yt_dlp.YoutubeDL(soundcloud_options), "Configuration SoundCloud"))
         
         last_error = None
@@ -177,22 +186,52 @@ class YTDLSource(discord.PCMVolumeTransformer):
                 logger.info(f"Tentative d'extraction avec {config_name}")
                 data = await loop.run_in_executor(None, lambda: ytdl_instance.extract_info(query, download=not stream))
                 
-                if 'entries' in data:
-                    # Prendre la première entrée si c'est une playlist
-                    data = data['entries'][0]
+                # Vérifier si data est None
+                if data is None:
+                    logger.warning(f"Aucune donnée extraite avec {config_name}")
+                    continue
                 
-                if not data:
+                # Gérer les playlists
+                if isinstance(data, dict) and 'entries' in data:
+                    # Vérifier si la liste entries existe et n'est pas vide
+                    if not data.get('entries'):
+                        logger.warning(f"Playlist vide avec {config_name}")
+                        continue
+                    
+                    # Prendre la première entrée valide
+                    for entry in data['entries']:
+                        if entry is not None and isinstance(entry, dict):
+                            data = entry
+                            break
+                    else:
+                        # Aucune entrée valide trouvée
+                        logger.warning(f"Aucune entrée valide dans la playlist avec {config_name}")
+                        continue
+                
+                # Vérifier que les données sont valides
+                if not isinstance(data, dict):
+                    logger.warning(f"Type de données invalide avec {config_name}")
+                    continue
+                    
+                if not data.get('url'):
+                    logger.warning(f"URL manquante dans les données avec {config_name}")
                     continue
                 
                 # Ajouter les informations Spotify si disponibles
                 if spotify_info:
                     data['spotify_info'] = spotify_info
                     data['platform'] = 'spotify'
-                    
-                filename = data['url'] if stream else ytdl_instance.prepare_filename(data)
-                logger.info(f"Extraction réussie avec {config_name}: {data.get('title', 'Titre inconnu')}")
-                return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
                 
+                # Créer la source audio
+                try:
+                    filename = data['url'] if stream else ytdl_instance.prepare_filename(data)
+                    title = data.get('title', 'Titre inconnu')
+                    logger.info(f"Extraction réussie avec {config_name}: {title}")
+                    return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
+                except Exception as audio_error:
+                    logger.warning(f"Erreur lors de la création de la source audio: {audio_error}")
+                    continue
+                    
             except Exception as e:
                 last_error = e
                 logger.warning(f"Échec avec {config_name}: {str(e)}")
@@ -201,21 +240,32 @@ class YTDLSource(discord.PCMVolumeTransformer):
         # Si toutes les tentatives échouent
         error_msg = f"Impossible d'extraire l'audio de {query}"
         if last_error:
-            if "Sign in to confirm you're not a bot" in str(last_error):
+            error_str = str(last_error)
+            if "Sign in to confirm you're not a bot" in error_str:
                 error_msg = "🤖 YouTube détecte une activité de bot. Essayez avec un autre lien ou réessayez plus tard."
-            elif "Video unavailable" in str(last_error):
+            elif any(msg in error_str for msg in ["Video unavailable", "not available", "private video"]):
                 error_msg = "❌ Cette vidéo n'est pas disponible (privée, supprimée ou restreinte géographiquement)."
-            elif "This video is not available" in str(last_error):
+            elif "This video is not available" in error_str:
                 error_msg = "❌ Cette vidéo n'est pas accessible dans votre région."
-            elif "soundcloud" in query.lower() and "not found" in str(last_error).lower():
+            elif query and "soundcloud" in query.lower() and "not found" in error_str.lower():
                 error_msg = "❌ Cette piste SoundCloud n'est pas disponible ou a été supprimée."
+            elif "argument of type 'NoneType'" in error_str:
+                error_msg = "❌ Impossible d'extraire les informations. Le contenu pourrait être bloqué ou inaccessible."
+            elif "No video formats found" in error_str:
+                error_msg = "❌ Aucun format audio disponible. Le contenu pourrait être restreint ou géo-bloqué."
             else:
-                error_msg = f"❌ Erreur lors de l'extraction: {str(last_error)}"
+                error_msg = f"❌ Erreur lors de l'extraction: {error_str}"
+                
+        # Ajouter des suggestions pour certains types d'erreurs
+        if "bot" in error_msg.lower() or "unavailable" in error_msg.lower():
+            error_msg += "\n💡 Suggestions:\n• Essayez avec un autre lien\n• Utilisez une recherche par titre\n• Essayez SoundCloud ou Spotify"
         
         logger.error(error_msg)
         raise Exception(error_msg)
 
 class MusicPlayer:
+    """Lecteur de musique pour un serveur Discord"""
+    
     def __init__(self, ctx):
         self.ctx = ctx
         self.bot = ctx.bot
@@ -233,90 +283,128 @@ class MusicPlayer:
         
     async def connect(self, voice_channel):
         """Se connecter au canal vocal"""
-        if self.voice_client is None:
-            self.voice_client = await voice_channel.connect()
-        else:
-            await self.voice_client.move_to(voice_channel)
+        try:
+            if self.voice_client is None:
+                self.voice_client = await voice_channel.connect()
+            else:
+                await self.voice_client.move_to(voice_channel)
+        except Exception as e:
+            logger.error(f"Erreur de connexion au canal vocal: {e}")
+            raise e
     
     async def disconnect(self):
         """Se déconnecter du canal vocal"""
-        if self.voice_client:
-            await self.voice_client.disconnect()
-            self.voice_client = None
+        try:
+            if self.voice_client:
+                await self.voice_client.disconnect()
+                self.voice_client = None
+        except Exception as e:
+            logger.error(f"Erreur de déconnexion: {e}")
     
     def add_to_queue(self, source):
         """Ajouter une source à la queue"""
-        self.queue.append(source)
+        if source:
+            self.queue.append(source)
     
     async def play_next(self):
         """Jouer la prochaine chanson"""
-        if self.loop and self.current:
-            # Rejouer la chanson actuelle
-            source = self.current
-        elif self.queue:
-            # Jouer la prochaine chanson de la queue
-            source = self.queue.popleft()
-            if self.loop_queue:
-                self.queue.append(source)
-        else:
-            # Aucune chanson à jouer
+        try:
+            if self.loop and self.current:
+                # Rejouer la chanson actuelle
+                source = self.current
+            elif self.queue:
+                # Jouer la prochaine chanson de la queue
+                source = self.queue.popleft()
+                if self.loop_queue:
+                    self.queue.append(source)
+            else:
+                # Aucune chanson à jouer
+                self.is_playing = False
+                self.current = None
+                return
+            
+            self.current = source
+            self.is_playing = True
+            self.is_paused = False
+            
+            # Ajuster le volume
+            if hasattr(source, 'volume'):
+                source.volume = self.volume
+            
+            # Jouer la chanson
+            def after_playing(error):
+                if error:
+                    logger.error(f"Erreur de lecture: {error}")
+                # Programmer la prochaine chanson
+                future = asyncio.run_coroutine_threadsafe(self.play_next(), self.bot.loop)
+                try:
+                    future.result()
+                except Exception as e:
+                    logger.error(f"Erreur lors de la programmation de la prochaine chanson: {e}")
+            
+            self.voice_client.play(source, after=after_playing)
+            
+            # Envoyer un message avec les informations de la chanson
+            embed = discord.Embed(
+                title="🎵 Lecture en cours",
+                description=f"**{source.title}**",
+                color=discord.Color.blue()
+            )
+            if source.thumbnail:
+                embed.set_thumbnail(url=source.thumbnail)
+            if source.uploader:
+                embed.add_field(name="Uploader", value=source.uploader, inline=True)
+            if source.duration and source.duration > 0:
+                minutes, seconds = divmod(source.duration, 60)
+                embed.add_field(name="Durée", value=f"{int(minutes):02d}:{int(seconds):02d}", inline=True)
+            
+            await self.channel.send(embed=embed)
+            
+        except Exception as e:
+            logger.error(f"Erreur dans play_next: {e}")
             self.is_playing = False
-            self.current = None
-            return
-        
-        self.current = source
-        self.is_playing = True
-        self.is_paused = False
-        
-        # Ajuster le volume
-        source.volume = self.volume
-        
-        # Jouer la chanson
-        self.voice_client.play(source, after=lambda e: self.bot.loop.create_task(self.play_next()) if e else self.bot.loop.create_task(self.play_next()))
-        
-        # Envoyer un message avec les informations de la chanson
-        embed = discord.Embed(
-            title="🎵 Lecture en cours",
-            description=f"**{source.title}**",
-            color=discord.Color.blue()
-        )
-        if source.thumbnail:
-            embed.set_thumbnail(url=source.thumbnail)
-        if source.uploader:
-            embed.add_field(name="Uploader", value=source.uploader, inline=True)
-        if source.duration:
-            minutes, seconds = divmod(source.duration, 60)
-            embed.add_field(name="Durée", value=f"{int(minutes):02d}:{int(seconds):02d}", inline=True)
-        
-        await self.channel.send(embed=embed)
     
     async def pause(self):
         """Mettre en pause"""
-        if self.voice_client and self.voice_client.is_playing():
-            self.voice_client.pause()
-            self.is_paused = True
+        try:
+            if self.voice_client and self.voice_client.is_playing():
+                self.voice_client.pause()
+                self.is_paused = True
+        except Exception as e:
+            logger.error(f"Erreur lors de la pause: {e}")
     
     async def resume(self):
         """Reprendre la lecture"""
-        if self.voice_client and self.voice_client.is_paused():
-            self.voice_client.resume()
-            self.is_paused = False
+        try:
+            if self.voice_client and self.voice_client.is_paused():
+                self.voice_client.resume()
+                self.is_paused = False
+        except Exception as e:
+            logger.error(f"Erreur lors de la reprise: {e}")
     
     async def stop(self):
         """Arrêter la lecture"""
-        if self.voice_client:
-            self.voice_client.stop()
-        self.queue.clear()
-        self.current = None
-        self.is_playing = False
-        self.is_paused = False
+        try:
+            if self.voice_client:
+                self.voice_client.stop()
+            self.queue.clear()
+            self.current = None
+            self.is_playing = False
+            self.is_paused = False
+        except Exception as e:
+            logger.error(f"Erreur lors de l'arrêt: {e}")
     
     async def skip(self):
         """Passer à la chanson suivante"""
-        if self.voice_client and self.voice_client.is_playing():
-            self.voice_client.stop()
+        try:
+            if self.voice_client and self.voice_client.is_playing():
+                self.voice_client.stop()
+        except Exception as e:
+            logger.error(f"Erreur lors du skip: {e}")
 
 class MusicBot(commands.Bot):
+    """Bot Discord de musique"""
+    
     def __init__(self):
         intents = discord.Intents.default()
         intents.message_content = True
@@ -332,12 +420,15 @@ class MusicBot(commands.Bot):
     
     async def on_ready(self):
         logger.info(f'{self.user} est connecté à Discord!')
-        await self.change_presence(
-            activity=discord.Activity(
-                type=discord.ActivityType.listening,
-                name=os.getenv('BOT_STATUS', 'Écoute de la musique 🎵')
+        try:
+            await self.change_presence(
+                activity=discord.Activity(
+                    type=discord.ActivityType.listening,
+                    name=os.getenv('BOT_STATUS', 'Écoute de la musique 🎵')
+                )
             )
-        )
+        except Exception as e:
+            logger.error(f"Erreur lors du changement de statut: {e}")
     
     def get_player(self, ctx):
         """Obtenir le player pour un serveur"""
@@ -349,22 +440,31 @@ bot = MusicBot()
 
 @bot.command(name='play', aliases=['p'])
 async def play(ctx, *, query):
-    """Jouer une chanson depuis YouTube"""
+    """Jouer une chanson depuis YouTube/SoundCloud/Spotify"""
     if not ctx.author.voice:
         await ctx.send("❌ Vous devez être dans un canal vocal pour utiliser cette commande!")
-        return    
+        return
+        
+    if not query or not query.strip():
+        await ctx.send("❌ Veuillez spécifier une chanson à jouer!")
+        return
+    
     voice_channel = ctx.author.voice.channel
     player = bot.get_player(ctx)
     
     # Se connecter au canal vocal
-    await player.connect(voice_channel)
+    try:
+        await player.connect(voice_channel)
+    except Exception as e:
+        await ctx.send(f"❌ Impossible de se connecter au canal vocal: {str(e)}")
+        return
     
     # Message de chargement
     loading_msg = await ctx.send("🔍 Recherche en cours...")
     
     try:
         # Extraire les informations de la vidéo
-        source = await YTDLSource.from_url(query, loop=bot.loop, stream=True)
+        source = await YTDLSource.from_url(query.strip(), loop=bot.loop, stream=True)
         
         # Détecter la plateforme pour l'affichage
         platform = detect_platform(query)
@@ -384,7 +484,7 @@ async def play(ctx, *, query):
                 color=discord.Color.green()
             )
             embed.add_field(name="Position", value=len(player.queue), inline=True)
-            if source.duration:
+            if source.duration and source.duration > 0:
                 embed.add_field(name="Durée", value=f"{source.duration // 60}:{source.duration % 60:02d}", inline=True)
             
             # Afficher la plateforme source
@@ -417,7 +517,7 @@ async def play(ctx, *, query):
                 value="• Vérifiez que le lien Spotify est correct\n• Configurez les credentials Spotify dans .env\n• Essayez de copier le titre et l'artiste manuellement",
                 inline=False
             )
-            embed.add_field(name="Détails", value=error_msg, inline=False)
+            embed.add_field(name="Détails", value=error_msg[:1000], inline=False)
             await loading_msg.edit(content="", embed=embed)
         elif "Sign in to confirm you're not a bot" in error_msg:
             embed = discord.Embed(
@@ -463,7 +563,7 @@ async def play(ctx, *, query):
         else:
             embed = discord.Embed(
                 title="❌ Erreur de lecture",
-                description=f"Impossible de lire ce contenu.",
+                description="Impossible de lire ce contenu.",
                 color=discord.Color.red()
             )
             embed.add_field(name="Détails", value=f"```{error_msg[:1000]}```", inline=False)
@@ -560,7 +660,7 @@ async def volume(ctx, volume: int = None):
         return
     
     player.volume = volume / 100
-    if player.current:
+    if player.current and hasattr(player.current, 'volume'):
         player.current.volume = player.volume
     
     await ctx.send(f"🔊 Volume ajusté à {volume}%")
@@ -605,7 +705,7 @@ async def now_playing(ctx):
         embed.set_thumbnail(url=source.thumbnail)
     if source.uploader:
         embed.add_field(name="Uploader", value=source.uploader, inline=True)
-    if source.duration:
+    if source.duration and source.duration > 0:
         minutes, seconds = divmod(source.duration, 60)
         embed.add_field(name="Durée", value=f"{int(minutes):02d}:{int(seconds):02d}", inline=True)
     
@@ -702,7 +802,7 @@ async def update_ytdlp(ctx):
             )
             embed.add_field(
                 name="🔄 Redémarrage recommandé",
-                value="Pour une meilleure stabilité, redémarrez le bot avec:\n`sudo systemctl restart opiozenmusic`",
+                value="Pour une meilleure stabilité, redémarrez le bot",
                 inline=False
             )
             await loading_msg.edit(content="", embed=embed)
@@ -764,15 +864,16 @@ async def supported_platforms(ctx):
 # Fonction utilitaire pour détecter le type de plateforme
 def detect_platform(url_or_query):
     """Détecter la plateforme de musique depuis l'URL ou la requête"""
+    if not url_or_query:
+        return 'search'
+        
     url_lower = url_or_query.lower()
     
     if 'youtube.com' in url_lower or 'youtu.be' in url_lower:
         return 'youtube'
     elif 'soundcloud.com' in url_lower:
         return 'soundcloud'
-    elif 'spotify.com' in url_lower:
-        return 'spotify'
-    elif 'open.spotify.com' in url_lower:
+    elif 'spotify.com' in url_lower or 'open.spotify.com' in url_lower:
         return 'spotify'
     else:
         # Si c'est juste du texte, c'est probablement une recherche
@@ -781,20 +882,20 @@ def detect_platform(url_or_query):
 # Configuration Spotify (optionnelle)
 def setup_spotify():
     """Configuration du client Spotify si les credentials sont disponibles"""
-    client_id = os.getenv('SPOTIFY_CLIENT_ID')
-    client_secret = os.getenv('SPOTIFY_CLIENT_SECRET')
-    
-    if client_id and client_secret:
-        try:
+    try:
+        client_id = os.getenv('SPOTIFY_CLIENT_ID')
+        client_secret = os.getenv('SPOTIFY_CLIENT_SECRET')
+        
+        if client_id and client_secret:
             client_credentials_manager = SpotifyClientCredentials(
                 client_id=client_id, 
                 client_secret=client_secret
             )
             return spotipy.Spotify(client_credentials_manager=client_credentials_manager)
-        except Exception as e:
-            logger.warning(f"Impossible d'initialiser Spotify: {e}")
-            return None
-    return None
+        return None
+    except Exception as e:
+        logger.warning(f"Impossible d'initialiser Spotify: {e}")
+        return None
 
 # Initialiser le client Spotify
 spotify_client = setup_spotify()
@@ -803,6 +904,9 @@ def get_spotify_track_info(spotify_url):
     """Récupérer les informations d'une piste Spotify"""
     if not spotify_client:
         raise Exception("Client Spotify non configuré. Ajoutez SPOTIFY_CLIENT_ID et SPOTIFY_CLIENT_SECRET à votre .env")
+    
+    if not spotify_url:
+        raise Exception("URL Spotify manquante")
     
     # Extraire l'ID de la piste depuis l'URL
     track_id_match = re.search(r'track/([a-zA-Z0-9]+)', spotify_url)
@@ -813,9 +917,12 @@ def get_spotify_track_info(spotify_url):
     
     try:
         track = spotify_client.track(track_id)
-        artist_name = track['artists'][0]['name']
-        track_name = track['name']
-        duration_ms = track['duration_ms']
+        if not track:
+            raise Exception("Piste Spotify introuvable")
+            
+        artist_name = track['artists'][0]['name'] if track.get('artists') else 'Artiste inconnu'
+        track_name = track.get('name', 'Titre inconnu')
+        duration_ms = track.get('duration_ms', 0)
         
         # Créer une requête de recherche pour YouTube
         search_query = f"{artist_name} - {track_name}"
@@ -824,7 +931,7 @@ def get_spotify_track_info(spotify_url):
             'search_query': search_query,
             'title': f"{artist_name} - {track_name}",
             'artist': artist_name,
-            'duration': duration_ms // 1000,
+            'duration': duration_ms // 1000 if duration_ms else 0,
             'platform': 'spotify'
         }
     except Exception as e:
@@ -833,21 +940,36 @@ def get_spotify_track_info(spotify_url):
 # Gestion des erreurs
 @bot.event
 async def on_command_error(ctx, error):
+    """Gestion globale des erreurs de commandes"""
     if isinstance(error, commands.MissingRequiredArgument):
         await ctx.send("❌ Arguments manquants. Utilisez `!help` pour voir les commandes.")
     elif isinstance(error, commands.CommandNotFound):
         await ctx.send("❌ Commande introuvable. Utilisez `!help` pour voir les commandes disponibles.")
+    elif isinstance(error, commands.BadArgument):
+        await ctx.send("❌ Argument invalide. Vérifiez la syntaxe avec `!help`.")
+    elif isinstance(error, commands.BotMissingPermissions):
+        await ctx.send("❌ Le bot n'a pas les permissions nécessaires.")
+    elif isinstance(error, commands.MissingPermissions):
+        await ctx.send("❌ Vous n'avez pas les permissions nécessaires.")
     else:
-        logger.error(f"Erreur de commande: {error}")
-        await ctx.send(f"❌ Une erreur s'est produite: {str(error)}")
+        logger.error(f"Erreur de commande non gérée: {error}")
+        await ctx.send(f"❌ Une erreur s'est produite: {str(error)[:500]}")
 
 if __name__ == "__main__":
+    # Vérification du token Discord
     token = os.getenv('DISCORD_TOKEN')
     if not token:
         logger.error("Token Discord manquant! Veuillez configurer DISCORD_TOKEN dans le fichier .env")
+        print("❌ ERREUR: Token Discord manquant!")
+        print("Créez un fichier .env avec: DISCORD_TOKEN=votre_token_ici")
         exit(1)
     
     try:
+        logger.info("Démarrage du bot OpiozenMusic...")
         bot.run(token)
+    except discord.LoginFailure:
+        logger.error("Token Discord invalide!")
+        print("❌ ERREUR: Token Discord invalide!")
     except Exception as e:
         logger.error(f"Erreur lors du démarrage du bot: {e}")
+        print(f"❌ ERREUR: {e}")
