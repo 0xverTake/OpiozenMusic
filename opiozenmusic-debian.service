@@ -1,0 +1,19 @@
+[Unit]
+Description=OpiozenMusic Discord Bot
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=YOUR_USERNAME
+Group=YOUR_USERNAME
+WorkingDirectory=/path/to/your/OpiozenMusic
+Environment=PATH=/path/to/your/OpiozenMusic/venv/bin
+ExecStart=/path/to/your/OpiozenMusic/venv/bin/python /path/to/your/OpiozenMusic/music_bot.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

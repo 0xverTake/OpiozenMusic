@@ -1,0 +1,15 @@
+[Unit]
+Description=OpiozenMusic Discord Bot
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/OpiozenMusic
+Environment=PATH=/home/pi/OpiozenMusic/venv/bin
+ExecStart=/home/pi/OpiozenMusic/venv/bin/python /home/pi/OpiozenMusic/music_bot.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
