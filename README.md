@@ -2,7 +2,7 @@
 
 ZenBeat est un bot musical Discord complet qui permet de jouer de la musique depuis YouTube et SoundCloud. Il offre une interface utilisateur intuitive avec des boutons de contrôle et des messages visuellement attrayants.
 
-![ZenBeat Logo](![image](https://github.com/user-attachments/assets/483c9f41-aa23-490c-a3a6-54030d25a3c0))
+![ZenBeat Logo](https://i.imgur.com/YOUR_IMAGE_ID_HERE.png)
 
 ## ✨ Fonctionnalités
 
