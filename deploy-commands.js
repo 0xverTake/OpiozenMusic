@@ -1,7 +1,35 @@
 const { REST, Routes } = require('discord.js');
-const { clientId, token } = require('./config.json');
 const fs = require('node:fs');
 const path = require('node:path');
+
+// Load environment variables from .env file
+require('dotenv').config();
+
+// Get token and clientId from environment variables or config.json as fallback
+let token, clientId;
+try {
+  token = process.env.TOKEN;
+  clientId = process.env.CLIENT_ID;
+  
+  // If not found in .env, try config.json
+  if (!token || !clientId) {
+    const config = require('./config.json');
+    token = token || config.token;
+    clientId = clientId || config.clientId;
+  }
+  
+  if (!token) {
+    throw new Error('Bot token not found in .env or config.json');
+  }
+  
+  if (!clientId) {
+    throw new Error('Client ID not found in .env or config.json');
+  }
+} catch (error) {
+  console.error('Error loading configuration:', error.message);
+  console.error('Please make sure you have a valid config.json file or TOKEN and CLIENT_ID in your .env file');
+  process.exit(1);
+}
 
 const commands = [];
 // Grab all the command files from the commands directory

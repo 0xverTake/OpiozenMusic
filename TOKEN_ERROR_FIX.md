@@ -1,100 +1,55 @@
-# Résolution de l'erreur "TokenInvalid: An invalid token was provided"
+# Fixing "Expected token to be set for this request" Error
 
-Cette erreur indique que le token Discord fourni à votre bot est invalide ou manquant. Voici comment résoudre ce problème :
+If you're encountering the error message:
 
-## Causes possibles
+```
+Error: Expected token to be set for this request, but none was present
+```
 
-1. **Token manquant** : Le token n'est pas défini dans votre fichier `.env` ou `config.json`
-2. **Token invalide** : Le token a été révoqué, est mal copié, ou contient des caractères incorrects
-3. **Problème de chargement** : Le fichier contenant le token n'est pas correctement chargé
+This error occurs when the Discord.js REST API is trying to use a token that is not properly set. Here's how to fix it:
 
-## Solutions
+## Solution
 
-### 1. Vérifier votre token Discord
+1. Make sure you have a valid Discord bot token and client ID.
 
-1. Connectez-vous au [Portail des développeurs Discord](https://discord.com/developers/applications)
-2. Sélectionnez votre application
-3. Allez dans l'onglet "Bot"
-4. Cliquez sur "Reset Token" pour générer un nouveau token
-5. Copiez ce nouveau token
+2. You can set these values in one of two ways:
 
-### 2. Mettre à jour votre configuration
-
-#### Option A : Utiliser un fichier .env
-
-1. Créez ou modifiez le fichier `.env` à la racine de votre projet
-2. Ajoutez ou mettez à jour la ligne suivante :
+   ### Option 1: Using the `.env` file (Recommended)
+   
+   Create or edit the `.env` file in the root directory of your project and add:
+   
    ```
-   TOKEN=votre_nouveau_token_ici
+   TOKEN=your_actual_discord_bot_token
+   CLIENT_ID=your_actual_discord_client_id
    ```
-3. Assurez-vous qu'il n'y a pas d'espaces avant ou après le signe égal
-4. Sauvegardez le fichier
+   
+   Replace `your_actual_discord_bot_token` with your actual Discord bot token and `your_actual_discord_client_id` with your actual Discord application client ID.
 
-#### Option B : Utiliser config.json
-
-1. Ouvrez le fichier `config.json`
-2. Mettez à jour la valeur du token :
+   ### Option 2: Using the `config.json` file
+   
+   Create or edit the `config.json` file in the root directory of your project and add:
+   
    ```json
    {
-     "token": "votre_nouveau_token_ici",
-     "clientId": "...",
-     "guildId": "...",
+     "token": "your_actual_discord_bot_token",
+     "clientId": "your_actual_discord_client_id",
+     "guildId": "your_guild_id_here",
      "prefix": "!",
      "embedColor": "#7289DA"
    }
    ```
-3. Sauvegardez le fichier
+   
+   Replace `your_actual_discord_bot_token` with your actual Discord bot token, `your_actual_discord_client_id` with your actual Discord application client ID, and `your_guild_id_here` with your Discord server ID.
 
-### 3. Vérifier le chargement du token dans index.js
+## Where to Find Your Bot Token and Client ID
 
-Assurez-vous que votre fichier `index.js` charge correctement le token. Le code devrait ressembler à ceci :
+1. Go to the [Discord Developer Portal](https://discord.com/developers/applications)
+2. Select your application
+3. For the Client ID: It's displayed on the "General Information" tab
+4. For the Token: Go to the "Bot" tab and click "Reset Token" to get a new token (or "Copy" if you already have one)
 
-```javascript
-// Load environment variables from .env file
-require('dotenv').config();
+## Important Security Notes
 
-// Get token from environment variables or config.json as fallback
-let token;
-try {
-  token = process.env.TOKEN || require('./config.json').token;
-  
-  // Vérification que le token existe et n'est pas vide
-  if (!token || token.length === 0) {
-    throw new Error('Token is empty or undefined');
-  }
-  
-  console.log('Token loaded successfully');
-} catch (error) {
-  console.error('Error loading token:', error.message);
-  console.error('Please make sure you have a valid config.json file or TOKEN in your .env file');
-  process.exit(1);
-}
-
-// Login to Discord with your client's token
-client.login(token);
-```
-
-### 4. Redémarrer votre bot
-
-Après avoir mis à jour le token, redémarrez votre bot :
-
-```bash
-pm2 restart OpiozenM
-```
-
-## Conseils de sécurité
-
-- **Ne partagez jamais** votre token Discord avec qui que ce soit
-- Ne le publiez pas sur GitHub ou d'autres dépôts publics
-- Si vous pensez que votre token a été compromis, réinitialisez-le immédiatement
-- Utilisez `.gitignore` pour exclure les fichiers `.env` et `config.json` de vos commits
-
-## Vérification supplémentaire
-
-Si vous utilisez PM2, vous pouvez vérifier les variables d'environnement avec :
-
-```bash
-pm2 env OpiozenM
-```
-
-Cela vous montrera si la variable TOKEN est correctement définie dans l'environnement PM2.
+- Never share your bot token with anyone
+- Do not commit your `.env` or `config.json` file with real tokens to public repositories
+- If you accidentally expose your token, reset it immediately in the Discord Developer Portal
