@@ -9,7 +9,7 @@ class MusicPlayer {
       // Define the nodes (Lavalink servers)
       nodes: [
         {
-          host: process.env.LAVALINK_HOST || 'localhost',
+          host: process.env.LAVALINK_HOST || '127.0.0.1', // Utiliser 127.0.0.1 au lieu de localhost pour éviter les problèmes IPv6
           port: parseInt(process.env.LAVALINK_PORT || '2333'),
           password: process.env.LAVALINK_PASSWORD || 'youshallnotpass',
           secure: process.env.LAVALINK_SECURE === 'true',
