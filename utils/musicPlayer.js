@@ -100,99 +100,147 @@ class MusicPlayer {
       if (query.match(/^https?:\/\//)) {
         // Check if it's a YouTube URL
         if (query.includes('youtube.com') || query.includes('youtu.be')) {
-          // Check if it's a playlist
-          if (query.includes('list=')) {
-            playlist = true;
-            const playlistInfo = await play.playlist_info(query, { incomplete: true });
-            const videos = await playlistInfo.all_videos();
-            
-            for (const video of videos) {
-              this.queue.push({
-                title: video.title,
-                url: video.url,
-                thumbnail: video.thumbnails[0]?.url || null,
-                duration: video.durationInSec,
+          try {
+            // Check if it's a playlist
+            if (query.includes('list=')) {
+              playlist = true;
+              const playlistInfo = await play.playlist_info(query, { incomplete: true });
+              
+              if (!playlistInfo) {
+                throw new Error('Impossible de récupérer les informations de la playlist. Vérifiez l\'URL et réessayez.');
+              }
+              
+              const videos = await playlistInfo.all_videos();
+              
+              if (!videos || videos.length === 0) {
+                throw new Error('Aucune vidéo trouvée dans cette playlist ou la playlist est privée.');
+              }
+              
+              for (const video of videos) {
+                if (video && video.title) {
+                  this.queue.push({
+                    title: video.title,
+                    url: video.url,
+                    thumbnail: video.thumbnails && video.thumbnails[0] ? video.thumbnails[0].url : null,
+                    duration: video.durationInSec || 0,
+                    requestedBy: interaction.user.tag
+                  });
+                }
+              }
+              
+              songInfo = {
+                title: playlistInfo.title || 'Playlist YouTube',
+                url: playlistInfo.url || query,
+                count: videos.length
+              };
+            } else {
+              // Single YouTube video
+              const videoInfo = await play.video_info(query);
+              
+              if (!videoInfo || !videoInfo.video_details) {
+                throw new Error('Impossible de récupérer les informations de la vidéo. Elle est peut-être privée ou restreinte.');
+              }
+              
+              const video = videoInfo.video_details;
+              
+              songInfo = {
+                title: video.title || 'Vidéo YouTube inconnue',
+                url: video.url || query,
+                thumbnail: video.thumbnails && video.thumbnails[0] ? video.thumbnails[0].url : null,
+                duration: video.durationInSec || 0,
                 requestedBy: interaction.user.tag
-              });
+              };
+              
+              this.queue.push(songInfo);
             }
-            
-            songInfo = {
-              title: playlistInfo.title,
-              url: playlistInfo.url,
-              count: videos.length
-            };
-          } else {
-            // Single YouTube video
-            const videoInfo = await play.video_info(query);
-            const video = videoInfo.video_details;
-            
-            songInfo = {
-              title: video.title,
-              url: video.url,
-              thumbnail: video.thumbnails[0]?.url || null,
-              duration: video.durationInSec,
-              requestedBy: interaction.user.tag
-            };
-            
-            this.queue.push(songInfo);
+          } catch (error) {
+            console.error('Erreur YouTube:', error);
+            throw new Error(`Erreur lors de l'extraction YouTube: ${error.message}`);
           }
         }
         // Check if it's a SoundCloud URL
         else if (query.includes('soundcloud.com')) {
-          const soundcloudInfo = await play.soundcloud(query);
-          
-          // Check if it's a playlist
-          if (soundcloudInfo.type === 'playlist') {
-            playlist = true;
-            const tracks = soundcloudInfo.tracks;
+          try {
+            const soundcloudInfo = await play.soundcloud(query);
             
-            for (const track of tracks) {
-              this.queue.push({
-                title: track.name,
-                url: track.url,
-                thumbnail: track.thumbnail,
-                duration: track.durationInSec,
-                requestedBy: interaction.user.tag
-              });
+            if (!soundcloudInfo) {
+              throw new Error('Impossible de récupérer les informations SoundCloud. Vérifiez l\'URL et réessayez.');
             }
             
-            songInfo = {
-              title: soundcloudInfo.name,
-              url: query,
-              count: tracks.length
-            };
-          } else {
-            // Single SoundCloud track
-            songInfo = {
-              title: soundcloudInfo.name,
-              url: soundcloudInfo.url,
-              thumbnail: soundcloudInfo.thumbnail,
-              duration: soundcloudInfo.durationInSec,
-              requestedBy: interaction.user.tag
-            };
-            
-            this.queue.push(songInfo);
+            // Check if it's a playlist
+            if (soundcloudInfo.type === 'playlist') {
+              playlist = true;
+              
+              if (!soundcloudInfo.tracks || soundcloudInfo.tracks.length === 0) {
+                throw new Error('Aucune piste trouvée dans cette playlist SoundCloud.');
+              }
+              
+              const tracks = soundcloudInfo.tracks;
+              
+              for (const track of tracks) {
+                if (track && track.name) {
+                  this.queue.push({
+                    title: track.name || 'Piste SoundCloud inconnue',
+                    url: track.url || query,
+                    thumbnail: track.thumbnail || null,
+                    duration: track.durationInSec || 0,
+                    requestedBy: interaction.user.tag
+                  });
+                }
+              }
+              
+              songInfo = {
+                title: soundcloudInfo.name || 'Playlist SoundCloud',
+                url: query,
+                count: tracks.length
+              };
+            } else {
+              // Single SoundCloud track
+              songInfo = {
+                title: soundcloudInfo.name || 'Piste SoundCloud inconnue',
+                url: soundcloudInfo.url || query,
+                thumbnail: soundcloudInfo.thumbnail || null,
+                duration: soundcloudInfo.durationInSec || 0,
+                requestedBy: interaction.user.tag
+              };
+              
+              this.queue.push(songInfo);
+            }
+          } catch (error) {
+            console.error('Erreur SoundCloud:', error);
+            throw new Error(`Erreur lors de l'extraction SoundCloud: ${error.message}`);
           }
+        } else {
+          throw new Error('URL non prise en charge. Utilisez YouTube ou SoundCloud.');
         }
       } else {
         // Search YouTube for the query
-        const searchResults = await play.search(query, { limit: 1 });
-        
-        if (searchResults.length === 0) {
-          throw new Error('Aucun résultat trouvé pour cette recherche!');
+        try {
+          const searchResults = await play.search(query, { limit: 1 });
+          
+          if (!searchResults || searchResults.length === 0) {
+            throw new Error('Aucun résultat trouvé pour cette recherche!');
+          }
+          
+          const video = searchResults[0];
+          
+          if (!video) {
+            throw new Error('Impossible de récupérer les informations de la vidéo.');
+          }
+          
+          songInfo = {
+            title: video.title || 'Vidéo inconnue',
+            url: video.url || '',
+            thumbnail: video.thumbnails && video.thumbnails[0] ? video.thumbnails[0].url : null,
+            duration: video.durationInSec || 0,
+            requestedBy: interaction.user.tag
+          };
+          
+          this.queue.push(songInfo);
+        } catch (error) {
+          console.error('Erreur de recherche:', error);
+          throw new Error(`Erreur lors de la recherche: ${error.message}`);
         }
-        
-        const video = searchResults[0];
-        
-        songInfo = {
-          title: video.title,
-          url: video.url,
-          thumbnail: video.thumbnails[0]?.url || null,
-          duration: video.durationInSec,
-          requestedBy: interaction.user.tag
-        };
-        
-        this.queue.push(songInfo);
       }
       
       // If nothing is currently playing, start playing
@@ -230,15 +278,31 @@ class MusicPlayer {
     this.currentSong = song;
     
     try {
+      if (!song.url) {
+        throw new Error('URL de la chanson invalide ou manquante.');
+      }
+      
       let stream;
       
       // Get the audio stream based on the URL
-      if (song.url.includes('youtube.com') || song.url.includes('youtu.be')) {
-        stream = await play.stream(song.url);
-      } else if (song.url.includes('soundcloud.com')) {
-        stream = await play.stream(song.url);
-      } else {
-        throw new Error('Format non pris en charge!');
+      try {
+        if (song.url.includes('youtube.com') || song.url.includes('youtu.be')) {
+          stream = await play.stream(song.url);
+        } else if (song.url.includes('soundcloud.com')) {
+          stream = await play.stream(song.url);
+        } else {
+          throw new Error('Format non pris en charge!');
+        }
+        
+        if (!stream || !stream.stream) {
+          throw new Error('Impossible de créer le flux audio. La ressource est peut-être indisponible.');
+        }
+      } catch (streamError) {
+        console.error(`Erreur de streaming: ${streamError.message}`);
+        this.textChannel?.send(`❌ Erreur lors du streaming: ${streamError.message}`);
+        this.currentSong = null;
+        this.playNext();
+        return;
       }
       
       // Create an audio resource from the stream
@@ -259,7 +323,8 @@ class MusicPlayer {
       return song;
     } catch (error) {
       console.error(`Error playing song: ${error.message}`);
-      this.textChannel?.send(`Erreur lors de la lecture de la chanson: ${error.message}`);
+      this.textChannel?.send(`❌ Erreur lors de la lecture de la chanson: ${error.message}`);
+      this.currentSong = null;
       this.playNext();
     }
   }
