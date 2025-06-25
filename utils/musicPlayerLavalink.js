@@ -2,17 +2,67 @@ const { Manager } = require('erela.js');
 const { EmbedBuilder } = require('discord.js');
 const { embedColor } = require('../config.json');
 
+// Fonction de journalisation améliorée
+function logDebug(message, obj = null) {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] [LAVALINK DEBUG] ${message}`);
+  if (obj) console.log(JSON.stringify(obj, null, 2));
+}
+
+// Fonction pour détecter le type de source
+function detectSourceType(query) {
+  // Spotify
+  if (query.match(/^(https?:\/\/)?(open\.spotify\.com|spotify)\/(track|album|playlist)/) || 
+      query.match(/^spotify:(track|album|playlist):/)) {
+    return 'spotify';
+  }
+  // Apple Music
+  else if (query.match(/^(https?:\/\/)?(music\.apple\.com|apple\.co)\/(album|playlist)/)) {
+    return 'applemusic';
+  }
+  // Deezer
+  else if (query.match(/^(https?:\/\/)?(www\.)?deezer\.com\/(track|album|playlist)/)) {
+    return 'deezer';
+  }
+  // YouTube
+  else if (query.match(/^(https?:\/\/)?(www\.|m\.)?(youtube\.com|youtu\.be)/)) {
+    return 'youtube';
+  }
+  // SoundCloud
+  else if (query.match(/^(https?:\/\/)?(www\.|m\.)?(soundcloud\.com)/)) {
+    return 'soundcloud';
+  }
+  // Recherche par défaut
+  else {
+    return 'search';
+  }
+}
+
 class MusicPlayer {
   constructor(client) {
     this.client = client;
+    
+    // Récupérer les paramètres de configuration
+    const host = process.env.LAVALINK_HOST || '127.0.0.1';
+    const port = parseInt(process.env.LAVALINK_PORT || '2333');
+    const password = process.env.LAVALINK_PASSWORD || 'youshallnotpass';
+    const secure = process.env.LAVALINK_SECURE === 'true';
+    
+    // Journaliser les paramètres de connexion
+    logDebug(`Initialisation de la connexion Lavalink avec les paramètres suivants:`);
+    logDebug(`Host: ${host}, Port: ${port}, Secure: ${secure}, Password: ${password ? '****' : 'non défini'}`);
+    
     this.manager = new Manager({
       // Define the nodes (Lavalink servers)
       nodes: [
         {
-          host: process.env.LAVALINK_HOST || '127.0.0.1', // Utiliser 127.0.0.1 au lieu de localhost pour éviter les problèmes IPv6
-          port: parseInt(process.env.LAVALINK_PORT || '2333'),
-          password: process.env.LAVALINK_PASSWORD || 'youshallnotpass',
-          secure: process.env.LAVALINK_SECURE === 'true',
+          identifier: 'Main Node',
+          host: host,
+          port: port,
+          password: password,
+          secure: secure,
+          retryAmount: 10,
+          retryDelay: 5000,
         },
       ],
       // Method to send voice data to Discord
@@ -30,15 +80,28 @@ class MusicPlayer {
   initEvents() {
     // Node events
     this.manager.on('nodeConnect', (node) => {
-      console.log(`Node ${node.options.identifier} connected.`);
+      logDebug(`✅ Node ${node.options.identifier} connected.`);
     });
 
     this.manager.on('nodeError', (node, error) => {
-      console.log(`Node ${node.options.identifier} had an error: ${error.message}`);
+      logDebug(`❌ Node ${node.options.identifier} had an error: ${error.message}`);
+      logDebug('Détails de l\'erreur:', error);
+      
+      // Tentative de reconnexion après erreur
+      setTimeout(() => {
+        logDebug(`Tentative de reconnexion au nœud ${node.options.identifier}...`);
+        node.connect();
+      }, 5000);
     });
 
     this.manager.on('nodeDisconnect', (node) => {
-      console.log(`Node ${node.options.identifier} disconnected.`);
+      logDebug(`⚠️ Node ${node.options.identifier} disconnected.`);
+      
+      // Tentative de reconnexion après déconnexion
+      setTimeout(() => {
+        logDebug(`Tentative de reconnexion au nœud ${node.options.identifier}...`);
+        node.connect();
+      }, 5000);
     });
 
     // Player events
@@ -94,7 +157,17 @@ class MusicPlayer {
 
     // Initialize the manager when the client is ready
     this.client.once('ready', () => {
+      logDebug(`Initialisation du gestionnaire Lavalink avec l'ID utilisateur ${this.client.user.id}`);
       this.manager.init(this.client.user.id);
+      
+      // Vérifier l'état des nœuds après initialisation
+      setTimeout(() => {
+        const nodes = this.manager.nodes;
+        logDebug(`État des nœuds après initialisation:`);
+        nodes.forEach(node => {
+          logDebug(`- ${node.options.identifier}: ${node.connected ? 'Connecté' : 'Déconnecté'}`);
+        });
+      }, 5000);
     });
 
     // Handle voice state updates for users
@@ -129,11 +202,41 @@ class MusicPlayer {
     let playlist = false;
     
     try {
+      // Vérifier si des nœuds sont disponibles
+      if (this.manager.nodes.size === 0) {
+        logDebug("❌ Erreur: Aucun nœud Lavalink n'est configuré");
+        throw new Error("Aucun nœud Lavalink n'est configuré");
+      }
+      
+      // Vérifier si des nœuds sont connectés
+      const connectedNodes = Array.from(this.manager.nodes.values()).filter(node => node.connected);
+      if (connectedNodes.length === 0) {
+        logDebug("❌ Erreur: No available nodes. Aucun nœud Lavalink n'est connecté");
+        
+        // Afficher l'état de tous les nœuds
+        this.manager.nodes.forEach(node => {
+          logDebug(`- Nœud ${node.options.identifier}: ${node.connected ? 'Connecté' : 'Déconnecté'}`);
+        });
+        
+        throw new Error("No available nodes");
+      }
+      
       // Get or create a player
       const player = this.manager.players.get(interaction.guild.id) || await this.connect(interaction);
       
+      // Détecter le type de source
+      const sourceType = detectSourceType(query);
+      logDebug(`Type de source détecté: ${sourceType} pour la requête: ${query}`);
+      
+      // Préfixer la requête pour les recherches
+      let searchQuery = query;
+      if (sourceType === 'search') {
+        searchQuery = `ytsearch:${query}`;
+        logDebug(`Recherche convertie en: ${searchQuery}`);
+      }
+      
       // Search for the song
-      const res = await this.manager.search(query, interaction.user);
+      const res = await this.manager.search(searchQuery, interaction.user);
       
       // Handle different result types
       switch (res.loadType) {
@@ -145,7 +248,8 @@ class MusicPlayer {
             url: res.tracks[0].uri,
             thumbnail: res.tracks[0].thumbnail || null,
             duration: res.tracks[0].duration,
-            requestedBy: interaction.user.tag
+            requestedBy: interaction.user.tag,
+            source: res.tracks[0].sourceName || detectSourceType(res.tracks[0].uri)
           };
           
           if (!player.playing && !player.paused && !player.queue.size) {
@@ -164,7 +268,8 @@ class MusicPlayer {
           songInfo = {
             title: res.playlist.name,
             url: query,
-            count: res.tracks.length
+            count: res.tracks.length,
+            source: detectSourceType(query)
           };
           
           if (!player.playing && !player.paused && !player.queue.size) {
@@ -181,7 +286,8 @@ class MusicPlayer {
             url: res.tracks[0].uri,
             thumbnail: res.tracks[0].thumbnail || null,
             duration: res.tracks[0].duration,
-            requestedBy: interaction.user.tag
+            requestedBy: interaction.user.tag,
+            source: res.tracks[0].sourceName || 'youtube'
           };
           
           if (!player.playing && !player.paused && !player.queue.size) {

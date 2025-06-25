@@ -1,6 +1,29 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { embedColor } = require('../config.json');
 
+// Fonction pour obtenir l'emoji correspondant à la source
+function getSourceEmoji(source) {
+  switch (source.toLowerCase()) {
+    case 'youtube':
+      return '📺';
+    case 'spotify':
+      return '💚';
+    case 'applemusic':
+      return '🍎';
+    case 'deezer':
+      return '💿';
+    case 'soundcloud':
+      return '☁️';
+    default:
+      return '🎵';
+  }
+}
+
+// Fonction pour mettre en majuscule la première lettre
+function capitalizeFirstLetter(string) {
+  return string.charAt(0).toUpperCase() + string.slice(1).toLowerCase();
+}
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('play')
@@ -45,7 +68,8 @@ module.exports = {
           .setDescription(`[${songInfo.title}](${songInfo.url})`)
           .addFields(
             { name: '⏱️ Durée', value: `${Math.floor(songInfo.duration / 60000)}:${((songInfo.duration % 60000) / 1000).toFixed(0).padStart(2, '0')}`, inline: true },
-            { name: '👤 Ajouté par', value: interaction.user.tag, inline: true }
+            { name: '👤 Ajouté par', value: interaction.user.tag, inline: true },
+            { name: '🎵 Source', value: songInfo.source ? getSourceEmoji(songInfo.source) + ' ' + capitalizeFirstLetter(songInfo.source) : '🎵 YouTube', inline: true }
           )
           .setFooter({ text: 'ZenBeat - Votre compagnon musical' })
           .setTimestamp();

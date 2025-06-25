@@ -1,128 +1,184 @@
+<div align="center">
+  <img src="assets/pp.jpg" alt="ZenBeat Logo" width="100%">
+</div>
+
 # ZenBeat - Bot Musical Discord
 
-ZenBeat est un bot musical Discord qui prend en charge YouTube, SoundCloud et d'autres plateformes avec des contrôles par boutons. Désormais compatible avec Lavalink pour une meilleure qualité audio et plus de fonctionnalités.
+<div align="center">
 
-## Fonctionnalités
+[![Discord.js](https://img.shields.io/badge/discord.js-v14-blue.svg)](https://discord.js.org)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Lavalink](https://img.shields.io/badge/Lavalink-Powered-orange.svg)](https://github.com/freyacodes/Lavalink)
+[![Node.js](https://img.shields.io/badge/Node.js-16%2B-brightgreen.svg)](https://nodejs.org)
 
-**Fonctionnalités avec Lavalink** (recommandé) :
-- Lecture de musique depuis YouTube (vidéos et playlists)
-- Lecture de musique depuis SoundCloud (pistes et playlists)
-- Support pour Twitch, Bandcamp, Vimeo et fichiers audio HTTP
-- Recherche par titre (pas besoin d'URL directe)
-- Contrôles par boutons (pause, reprise, passer, arrêter)
-- Mode boucle
-- Contrôle du volume
-- File d'attente de chansons
+</div>
 
-**Fonctionnalités alternatives** (avec ytdl-core et @distube/ytdl-core) :
-- Lecture de musique depuis YouTube (vidéos individuelles uniquement)
-- Contrôles par boutons (pause, reprise, passer, arrêter)
-- Mode boucle
-- Contrôle du volume
-- File d'attente de chansons
-- Limitations : pas de playlists, pas de recherche, pas de SoundCloud
+<div align="center">
+  <b>Un bot musical Discord puissant et élégant avec support multi-plateformes et contrôles intuitifs</b>
+</div>
 
-## Installation
+<br>
 
-1. Clonez ce dépôt
-2. Installez les dépendances avec `npm install`
-3. Copiez `config.json.example` en `config.json` et remplissez les informations nécessaires
-4. Démarrez le bot avec `npm start`
+## ✨ Fonctionnalités
 
-## Utilisation avec Lavalink (Recommandé)
+<table>
+  <tr>
+    <td>
+      <h3>🎵 Sources Musicales</h3>
+      <ul>
+        <li>YouTube (vidéos et playlists)</li>
+        <li>Spotify (avec LavaSrc)</li>
+        <li>Apple Music (avec LavaSrc)</li>
+        <li>Deezer (avec LavaSrc)</li>
+        <li>SoundCloud</li>
+        <li>Twitch, Bandcamp, Vimeo</li>
+      </ul>
+    </td>
+    <td>
+      <h3>🎮 Contrôles</h3>
+      <ul>
+        <li>Boutons interactifs</li>
+        <li>Commandes slash</li>
+        <li>Contrôle du volume</li>
+        <li>Mode boucle</li>
+        <li>File d'attente avancée</li>
+      </ul>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <h3>⚙️ Technique</h3>
+      <ul>
+        <li>Lavalink pour une qualité audio supérieure</li>
+        <li>Recherche par titre (pas besoin d'URL)</li>
+        <li>Faible consommation de ressources</li>
+        <li>Haute disponibilité avec PM2</li>
+      </ul>
+    </td>
+    <td>
+      <h3>🛠️ Facilité d'utilisation</h3>
+      <ul>
+        <li>Installation simple</li>
+        <li>Documentation détaillée</li>
+        <li>Guides de dépannage</li>
+        <li>Configuration flexible</li>
+      </ul>
+    </td>
+  </tr>
+</table>
 
-Pour profiter de toutes les fonctionnalités, utilisez Lavalink :
+## 🚀 Installation
 
-1. Installez Java 13 ou supérieur
-2. Téléchargez Lavalink depuis [GitHub](https://github.com/freyacodes/Lavalink/releases)
-3. Utilisez le fichier `application.yml` fourni
-4. Démarrez Lavalink avec `java -jar Lavalink.jar`
-5. Configurez les variables d'environnement pour le bot (voir ci-dessous)
+### Prérequis
 
-Pour des instructions détaillées, consultez le fichier [LAVALINK_GUIDE.md](LAVALINK_GUIDE.md).
+- [Node.js](https://nodejs.org/) (v16.9.0 ou supérieur)
+- [npm](https://www.npmjs.com/) (inclus avec Node.js)
+- [Java](https://www.oracle.com/java/technologies/javase-jdk13-downloads.html) (v13 ou supérieur, pour Lavalink)
 
-## Utilisation avec PM2 (Recommandé pour la production)
+### Étapes d'installation
 
-Pour exécuter le bot en arrière-plan et le maintenir actif 24/7, vous pouvez utiliser PM2 :
+1. **Clonez le dépôt**
+   ```bash
+   git clone https://github.com/votre-nom/ZenBeat.git
+   cd ZenBeat
+   ```
 
-1. Installez PM2 globalement : `npm install -g pm2`
-2. Démarrez le bot avec PM2 : `pm2 start ecosystem.config.js`
+2. **Installez les dépendances**
+   ```bash
+   npm install
+   ```
 
-Ou utilisez simplement les scripts de démarrage fournis :
-- Sur Windows : exécutez `start-bot.bat`
-- Sur Linux/Mac : exécutez `./start-bot.sh`
+3. **Configurez le bot**
+   ```bash
+   cp config.json.example config.json
+   cp .env.example .env
+   ```
+   Modifiez `config.json` et `.env` avec vos informations
 
-Pour plus d'informations sur l'utilisation de PM2, consultez le fichier [PM2_GUIDE.md](PM2_GUIDE.md).
+4. **Déployez les commandes slash**
+   ```bash
+   node deploy-commands.js
+   ```
 
-## Configuration
+5. **Démarrez Lavalink**
+   ```bash
+   # Sur Windows
+   start-lavalink.bat
+   
+   # Sur Linux/Mac
+   ./start-lavalink.sh
+   ```
 
-Vous pouvez configurer le bot de plusieurs façons :
+6. **Démarrez le bot**
+   ```bash
+   # Démarrage simple
+   npm start
+   
+   # Avec PM2 (recommandé pour la production)
+   pm2 start ecosystem.config.js
+   ```
 
-### 1. Utiliser config.json
+## 📚 Utilisation
 
-Copiez `config.json.example` en `config.json` et remplissez les informations suivantes :
+### Commandes principales
 
-```json
-{
-  "token": "VOTRE_TOKEN_DISCORD",
-  "clientId": "ID_CLIENT_DE_VOTRE_BOT",
-  "guildId": "ID_DE_VOTRE_SERVEUR",
-  "prefix": "!",
-  "embedColor": "#7289DA"
-}
+| Commande | Description |
+|----------|-------------|
+| `/play <query>` | Joue une chanson ou ajoute à la file d'attente (URL ou recherche) |
+| `/pause` | Met en pause la chanson en cours |
+| `/resume` | Reprend la lecture de la chanson en pause |
+| `/skip` | Passe à la chanson suivante |
+| `/stop` | Arrête la lecture et vide la file d'attente |
+| `/queue` | Affiche la file d'attente actuelle |
+| `/loop` | Active/désactive le mode boucle |
+| `/volume <1-100>` | Règle le volume de lecture |
+| `/help` | Affiche la liste des commandes |
+
+### Exemples d'utilisation
+
+```
+/play never gonna give you up
+/play https://www.youtube.com/watch?v=dQw4w9WgXcQ
+/play https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT
+/play https://music.apple.com/fr/album/song/123456789
+/play https://www.deezer.com/track/987654321
 ```
 
-### 2. Utiliser des variables d'environnement
+## 🔧 Configuration avancée
 
-Créez un fichier `.env` à la racine du projet avec les variables suivantes :
+### Lavalink avec LavaSrc
 
-```
-# Obligatoire
-TOKEN=VOTRE_TOKEN_DISCORD
+ZenBeat prend en charge le plugin LavaSrc pour Lavalink, permettant la lecture depuis Spotify, Apple Music, et Deezer. Consultez [LAVASRC_GUIDE.md](LAVASRC_GUIDE.md) pour les instructions de configuration.
 
-# Pour Lavalink (recommandé)
-LAVALINK_HOST=localhost
-LAVALINK_PORT=2333
-LAVALINK_PASSWORD=youshallnotpass
-LAVALINK_SECURE=false
+### Hébergement 24/7
 
-# Pour ytdl-core (alternative)
-YOUTUBE_COOKIE=VOTRE_COOKIE_YOUTUBE
-```
+Pour maintenir votre bot en ligne 24/7, nous recommandons l'utilisation de PM2. Consultez [PM2_LAVALINK_GUIDE.md](PM2_LAVALINK_GUIDE.md) pour les instructions détaillées.
 
-## Méthodes de lecture audio
+### Résolution des problèmes
 
-### Méthode 1 : Utiliser Lavalink (Recommandé)
+Si vous rencontrez des problèmes, consultez nos guides de dépannage :
+- [NO_AVAILABLE_NODES_FIX.md](NO_AVAILABLE_NODES_FIX.md) - Pour les problèmes de connexion à Lavalink
+- [TOKEN_ERROR_FIX.md](TOKEN_ERROR_FIX.md) - Pour les problèmes d'authentification Discord
 
-Lavalink est un serveur audio autonome qui offre de nombreux avantages :
-- Meilleure qualité audio
-- Support pour plus de sources (YouTube, SoundCloud, Twitch, etc.)
-- Meilleure gestion des playlists
-- Recherche intégrée
-- Moins de problèmes avec les restrictions de YouTube
-- Performances améliorées
+## 📋 Guides
 
-Voir [LAVALINK_GUIDE.md](LAVALINK_GUIDE.md) pour les instructions d'installation et d'utilisation.
+- [LAVALINK_GUIDE.md](LAVALINK_GUIDE.md) - Guide complet pour Lavalink
+- [LAVASRC_GUIDE.md](LAVASRC_GUIDE.md) - Configuration de LavaSrc pour Spotify, Apple Music, etc.
+- [PM2_GUIDE.md](PM2_GUIDE.md) - Utilisation de PM2 pour l'hébergement
+- [PM2_LAVALINK_GUIDE.md](PM2_LAVALINK_GUIDE.md) - Configuration de PM2 avec Lavalink
+- [HOSTING_GUIDE.md](hosting-guide.md) - Guide d'hébergement sur VPS
 
-### Méthode 2 : Utiliser ytdl-core et @distube/ytdl-core
-
-Si vous ne pouvez pas utiliser Lavalink, le bot peut fonctionner avec `ytdl-core` et `@distube/ytdl-core`, mais avec des fonctionnalités limitées :
-- Les playlists YouTube ne sont pas directement prises en charge
-- La recherche YouTube n'est pas supportée (il faut fournir une URL directe YouTube)
-- SoundCloud n'est pas pris en charge (YouTube uniquement)
-
-## Commandes
-
-- `/play <query>` - Joue une chanson ou ajoute à la file d'attente (URL ou recherche avec Lavalink)
-- `/pause` - Met en pause la chanson en cours
-- `/resume` - Reprend la lecture de la chanson en pause
-- `/skip` - Passe à la chanson suivante
-- `/stop` - Arrête la lecture et vide la file d'attente
-- `/queue` - Affiche la file d'attente actuelle
-- `/loop` - Active/désactive le mode boucle
-- `/volume <1-100>` - Règle le volume de lecture
-- `/help` - Affiche la liste des commandes
-
-## Licence
+## 📝 Licence
 
 Ce projet est sous licence MIT. Voir le fichier [LICENSE](LICENSE) pour plus de détails.
+
+## 🤝 Contribution
+
+Les contributions sont les bienvenues ! N'hésitez pas à ouvrir une issue ou à soumettre une pull request.
+
+---
+
+<div align="center">
+  <p>Créé avec ❤️ pour les amateurs de musique sur Discord</p>
+  <p>© 2025 ZenBeat</p>
+</div>

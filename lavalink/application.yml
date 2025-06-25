@@ -12,6 +12,10 @@ lavalink:
       vimeo: true
       http: true
       local: false
+    plugins:
+      - dependency: "com.github.topi314.lavasrc:lavasrc-plugin:4.0.1"
+        repository: "https://maven.lavalink.dev/releases"
+        snapshot: false
     bufferDurationMs: 400
     youtubePlaylistLoadLimit: 6 # Number of pages at 100 each
     playerUpdateInterval: 5 # How frequently to send player updates to clients, in seconds
@@ -43,3 +47,37 @@ logging:
   level:
     root: INFO
     lavalink: INFO
+
+plugins:
+  lavasrc:
+    providers:
+      # Pour Spotify
+      spotify: false # Définir sur true si vous avez des identifiants Spotify
+      spotifyClientId: "" # Votre ID client Spotify
+      spotifyClientSecret: "" # Votre secret client Spotify
+      
+      # Pour Apple Music
+      applemusic: false # Définir sur true si vous avez un token Apple Music
+      appleMusicToken: "" # Votre token Apple Music
+      appleMusicCountryCode: "US" # Code pays pour Apple Music
+      
+      # Pour Deezer
+      deezer: true
+      deezerSources:
+        - "youtube"
+      
+      # Pour Yandex Music
+      yandexmusic: false
+      
+      # Pour FlowerTube (YouTube sans API key)
+      floweryoutube: true # Utilise YouTube sans API key
+      
+      # Sources à utiliser pour les recherches
+      defaultSearchSources:
+        - "youtube"
+        - "deezer"
+      
+      # Sources à utiliser pour les recherches par défaut
+      defaultTopSearchSources:
+        - "youtube"
+        - "deezer"
