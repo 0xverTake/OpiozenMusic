@@ -1,246 +1,287 @@
-# Guide de mise à jour de ZenBeat sur un VPS
+# Guide de mise à jour du bot ZenBeat sur un VPS
 
-Ce guide explique comment mettre à jour votre bot ZenBeat sur un VPS sans avoir à cloner le dépôt à chaque fois.
+Ce guide explique comment mettre à jour votre bot ZenBeat sur un VPS sans avoir à cloner le dépôt à chaque fois. Plusieurs méthodes sont proposées, de la plus simple à la plus avancée.
 
-## Méthode 1 : Mise à jour via Git Pull
+## Table des matières
 
-Si vous avez initialement installé ZenBeat en clonant le dépôt Git, vous pouvez facilement le mettre à jour en utilisant `git pull`.
+1. [Méthode 1: Mise à jour via Git Pull](#méthode-1-mise-à-jour-via-git-pull)
+2. [Méthode 2: Mise à jour manuelle de fichiers spécifiques](#méthode-2-mise-à-jour-manuelle-de-fichiers-spécifiques)
+3. [Méthode 3: Utilisation de SFTP](#méthode-3-utilisation-de-sftp)
+4. [Méthode 4: Script de mise à jour automatique](#méthode-4-script-de-mise-à-jour-automatique)
+5. [Sauvegardes et précautions](#sauvegardes-et-précautions)
+6. [Résolution des problèmes courants](#résolution-des-problèmes-courants)
 
-### Étapes :
+## Méthode 1: Mise à jour via Git Pull
 
-1. **Connectez-vous à votre VPS** via SSH
+Si vous avez initialement cloné le dépôt Git, cette méthode est la plus simple.
+
+### Étapes:
+
+1. Connectez-vous à votre VPS via SSH:
    ```bash
    ssh utilisateur@adresse_ip_du_vps
    ```
 
-2. **Accédez au répertoire du bot**
+2. Naviguez vers le répertoire du bot:
    ```bash
-   cd /chemin/vers/ZenBeat
+   cd /chemin/vers/votre/bot
    ```
 
-3. **Arrêtez le bot** (si vous utilisez PM2)
+3. Arrêtez le bot s'il est en cours d'exécution:
    ```bash
-   pm2 stop zenbeat
+   # Si vous utilisez PM2
+   pm2 stop ZenBeat
+   
+   # Si vous utilisez un processus en arrière-plan
+   pkill -f "node index.js"
    ```
 
-4. **Récupérez les dernières modifications**
+4. Sauvegardez votre configuration actuelle:
+   ```bash
+   cp config.json config.json.backup
+   cp .env .env.backup
+   ```
+
+5. Récupérez les dernières modifications:
    ```bash
    git pull origin main
    ```
 
-5. **Installez les nouvelles dépendances** (si nécessaire)
+6. Installez les nouvelles dépendances si nécessaire:
    ```bash
    npm install
    ```
 
-6. **Redémarrez le bot**
+7. Redémarrez le bot:
    ```bash
-   pm2 restart zenbeat
-   ```
-
-7. **Vérifiez les logs** pour vous assurer que tout fonctionne correctement
-   ```bash
-   pm2 logs zenbeat
-   ```
-
-## Méthode 2 : Mise à jour manuelle de fichiers spécifiques
-
-Si vous avez besoin de mettre à jour uniquement certains fichiers (comme pour corriger un bug spécifique), vous pouvez le faire manuellement.
-
-### Étapes :
-
-1. **Connectez-vous à votre VPS** via SSH
-   ```bash
-   ssh utilisateur@adresse_ip_du_vps
-   ```
-
-2. **Arrêtez le bot** (si vous utilisez PM2)
-   ```bash
-   pm2 stop zenbeat
-   ```
-
-3. **Modifiez le fichier concerné** avec un éditeur de texte comme nano ou vim
-   ```bash
-   nano /chemin/vers/ZenBeat/utils/musicPlayerLavalink.js
-   ```
-
-4. **Effectuez les modifications nécessaires**
+   # Si vous utilisez PM2
+   pm2 restart ZenBeat
    
-   Par exemple, pour corriger l'erreur "node.joinChannel is not a function", remplacez :
-   ```javascript
-   const player = await node.joinChannel({
-   ```
-   par :
-   ```javascript
-   const player = await node.joinVoiceChannel({
+   # Si vous démarrez manuellement
+   node index.js &
    ```
 
-5. **Sauvegardez le fichier**
-   - Dans nano : Ctrl+O pour sauvegarder, puis Ctrl+X pour quitter
-   - Dans vim : Appuyez sur Échap, puis tapez `:wq` et appuyez sur Entrée
+## Méthode 2: Mise à jour manuelle de fichiers spécifiques
 
-6. **Redémarrez le bot**
+Si vous n'avez pas cloné le dépôt Git ou si vous souhaitez mettre à jour uniquement certains fichiers, cette méthode est appropriée.
+
+### Étapes:
+
+1. Identifiez les fichiers à mettre à jour (par exemple, `utils/musicPlayerLavalink.js`).
+
+2. Connectez-vous à votre VPS via SSH.
+
+3. Arrêtez le bot comme dans la méthode 1.
+
+4. Sauvegardez les fichiers que vous allez modifier:
    ```bash
-   pm2 restart zenbeat
+   cp utils/musicPlayerLavalink.js utils/musicPlayerLavalink.js.backup
    ```
 
-## Méthode 3 : Utilisation de SFTP pour transférer des fichiers
-
-Vous pouvez également utiliser un client SFTP comme FileZilla pour transférer des fichiers entre votre ordinateur local et le VPS.
-
-### Étapes :
-
-1. **Téléchargez et installez FileZilla** (ou un autre client SFTP) sur votre ordinateur local
-
-2. **Connectez-vous à votre VPS** via SFTP
-   - Hôte : sftp://adresse_ip_du_vps
-   - Nom d'utilisateur : votre_nom_utilisateur
-   - Mot de passe : votre_mot_de_passe
-   - Port : 22 (par défaut)
-
-3. **Arrêtez le bot** sur le VPS (via SSH)
+5. Téléchargez le nouveau fichier directement sur le serveur:
    ```bash
-   pm2 stop zenbeat
+   # Depuis GitHub (nécessite curl)
+   curl -o utils/musicPlayerLavalink.js https://raw.githubusercontent.com/votre-nom/ZenBeat/main/utils/musicPlayerLavalink.js
+   
+   # Ou créez/modifiez le fichier avec un éditeur de texte
+   nano utils/musicPlayerLavalink.js
    ```
 
-4. **Naviguez jusqu'au répertoire du bot** dans FileZilla
+6. Redémarrez le bot comme dans la méthode 1.
 
-5. **Téléchargez les fichiers** que vous souhaitez modifier sur votre ordinateur local
+## Méthode 3: Utilisation de SFTP
 
-6. **Modifiez les fichiers** localement avec votre éditeur préféré
+Pour les utilisateurs qui préfèrent une interface graphique, SFTP est une bonne option.
 
-7. **Téléversez les fichiers modifiés** vers le VPS
+### Étapes:
 
-8. **Redémarrez le bot** sur le VPS (via SSH)
+1. Installez un client SFTP comme FileZilla, WinSCP ou Cyberduck sur votre ordinateur local.
+
+2. Connectez-vous à votre VPS avec les informations suivantes:
+   - Hôte: Adresse IP de votre VPS
+   - Nom d'utilisateur: Votre nom d'utilisateur SSH
+   - Mot de passe: Votre mot de passe SSH
+   - Port: 22 (port SSH par défaut)
+
+3. Arrêtez le bot sur le VPS via SSH comme dans la méthode 1.
+
+4. Naviguez vers le répertoire du bot dans votre client SFTP.
+
+5. Téléchargez les fichiers que vous souhaitez mettre à jour depuis votre ordinateur local vers le VPS.
+
+6. Redémarrez le bot via SSH comme dans la méthode 1.
+
+## Méthode 4: Script de mise à jour automatique
+
+Pour les utilisateurs avancés, un script de mise à jour automatique peut simplifier le processus.
+
+### Création du script:
+
+1. Connectez-vous à votre VPS via SSH.
+
+2. Créez un fichier `update-bot.sh`:
    ```bash
-   pm2 restart zenbeat
+   nano update-bot.sh
    ```
 
-## Méthode 4 : Script de mise à jour automatique
-
-Vous pouvez créer un script de mise à jour automatique pour simplifier le processus.
-
-### Création du script :
-
-1. **Créez un fichier `update.sh`** dans le répertoire du bot
-   ```bash
-   nano /chemin/vers/ZenBeat/update.sh
-   ```
-
-2. **Ajoutez le contenu suivant** :
+3. Ajoutez le contenu suivant:
    ```bash
    #!/bin/bash
    
-   # Afficher un message de début
-   echo "Début de la mise à jour de ZenBeat..."
+   # Configuration
+   BOT_DIR="/chemin/vers/votre/bot"
+   BACKUP_DIR="$BOT_DIR/backups/$(date +%Y%m%d_%H%M%S)"
+   REPO_URL="https://github.com/votre-nom/ZenBeat.git"
+   
+   # Créer le répertoire de sauvegarde
+   mkdir -p "$BACKUP_DIR"
+   
+   # Aller dans le répertoire du bot
+   cd "$BOT_DIR" || exit 1
    
    # Arrêter le bot
-   echo "Arrêt du bot..."
-   pm2 stop zenbeat
+   if command -v pm2 &> /dev/null; then
+     echo "Arrêt du bot via PM2..."
+     pm2 stop ZenBeat
+   else
+     echo "Arrêt du bot via pkill..."
+     pkill -f "node index.js"
+   fi
    
    # Sauvegarder les fichiers de configuration
    echo "Sauvegarde des fichiers de configuration..."
-   cp .env .env.backup
-   cp config.json config.json.backup
+   cp config.json "$BACKUP_DIR/"
+   cp .env "$BACKUP_DIR/"
    
-   # Récupérer les dernières modifications
-   echo "Récupération des dernières modifications..."
-   git pull origin main
+   # Mettre à jour le code
+   if [ -d .git ]; then
+     echo "Mise à jour via Git..."
+     git pull origin main
+   else
+     echo "Mise à jour via téléchargement direct..."
+     TMP_DIR=$(mktemp -d)
+     git clone "$REPO_URL" "$TMP_DIR"
+     
+     # Exclure les fichiers de configuration
+     rm -f "$TMP_DIR/config.json" "$TMP_DIR/.env"
+     
+     # Copier les nouveaux fichiers
+     cp -r "$TMP_DIR"/* "$BOT_DIR/"
+     
+     # Nettoyer
+     rm -rf "$TMP_DIR"
+   fi
    
-   # Restaurer les fichiers de configuration
-   echo "Restauration des fichiers de configuration..."
-   cp .env.backup .env
-   cp config.json.backup config.json
-   
-   # Installer les nouvelles dépendances
-   echo "Installation des nouvelles dépendances..."
+   # Installer les dépendances
+   echo "Installation des dépendances..."
    npm install
    
    # Redémarrer le bot
-   echo "Redémarrage du bot..."
-   pm2 restart zenbeat
+   if command -v pm2 &> /dev/null; then
+     echo "Démarrage du bot via PM2..."
+     pm2 restart ZenBeat
+   else
+     echo "Démarrage du bot en arrière-plan..."
+     node index.js &
+   fi
    
-   # Afficher les logs
-   echo "Affichage des logs..."
-   pm2 logs zenbeat --lines 20
+   echo "Mise à jour terminée!"
+   ```
+
+4. Rendez le script exécutable:
+   ```bash
+   chmod +x update-bot.sh
+   ```
+
+5. Exécutez le script pour mettre à jour le bot:
+   ```bash
+   ./update-bot.sh
+   ```
+
+## Sauvegardes et précautions
+
+Avant toute mise à jour, il est fortement recommandé de:
+
+1. **Sauvegarder l'ensemble du répertoire du bot**:
+   ```bash
+   cp -r /chemin/vers/votre/bot /chemin/vers/votre/bot_backup_$(date +%Y%m%d)
+   ```
+
+2. **Vérifier les journaux après la mise à jour**:
+   ```bash
+   # Si vous utilisez PM2
+   pm2 logs ZenBeat
    
-   echo "Mise à jour terminée !"
+   # Si vous utilisez un fichier de journal
+   tail -f logs/bot.log
    ```
 
-3. **Rendez le script exécutable**
+3. **Conserver les anciennes versions des fichiers modifiés** pendant quelques jours, au cas où vous auriez besoin de revenir en arrière.
+
+## Résolution des problèmes courants
+
+### Le bot ne démarre pas après la mise à jour
+
+1. Vérifiez les journaux pour identifier l'erreur:
    ```bash
-   chmod +x /chemin/vers/ZenBeat/update.sh
+   pm2 logs ZenBeat
    ```
 
-4. **Exécutez le script** pour mettre à jour le bot
+2. Assurez-vous que toutes les dépendances sont installées:
    ```bash
-   cd /chemin/vers/ZenBeat
-   ./update.sh
+   npm install
    ```
 
-## Conseils supplémentaires
+3. Vérifiez que les fichiers de configuration sont corrects:
+   ```bash
+   # Comparez avec la sauvegarde
+   diff config.json config.json.backup
+   diff .env .env.backup
+   ```
 
-### Sauvegarde avant mise à jour
+4. Restaurez à partir de la sauvegarde si nécessaire:
+   ```bash
+   cp config.json.backup config.json
+   cp .env.backup .env
+   ```
 
-Avant toute mise à jour, il est recommandé de sauvegarder vos fichiers importants :
+### Erreurs liées à Lavalink
+
+1. Assurez-vous que Lavalink est à jour et en cours d'exécution:
+   ```bash
+   # Vérifier si Lavalink est en cours d'exécution
+   ps aux | grep lavalink
+   
+   # Redémarrer Lavalink si nécessaire
+   cd /chemin/vers/lavalink
+   java -jar Lavalink.jar &
+   ```
+
+2. Vérifiez les journaux de Lavalink pour les erreurs:
+   ```bash
+   tail -f /chemin/vers/lavalink/logs/spring.log
+   ```
+
+3. Consultez les guides spécifiques à Lavalink:
+   - [LAVALINK_GUIDE.md](LAVALINK_GUIDE.md)
+   - [LAVALINK_V4_UPDATE.md](LAVALINK_V4_UPDATE.md)
+   - [SHOUKAKU_V4_API_FIX.md](SHOUKAKU_V4_API_FIX.md)
+   - [LAVALINK_SEARCH_FIX.md](LAVALINK_SEARCH_FIX.md)
+
+### Problèmes de permissions
+
+Si vous rencontrez des erreurs de permission:
 
 ```bash
-# Créer un répertoire de sauvegarde
-mkdir -p ~/backups/zenbeat/$(date +%Y-%m-%d)
+# Vérifiez les permissions des fichiers
+ls -la /chemin/vers/votre/bot
 
-# Copier les fichiers importants
-cp -r /chemin/vers/ZenBeat/{.env,config.json,utils,commands} ~/backups/zenbeat/$(date +%Y-%m-%d)/
+# Corrigez les permissions si nécessaire
+chmod -R 755 /chemin/vers/votre/bot
+chmod 644 /chemin/vers/votre/bot/config.json
+chmod 644 /chemin/vers/votre/bot/.env
 ```
 
-### Mise à jour de Lavalink
+---
 
-Si vous devez également mettre à jour Lavalink :
-
-1. **Arrêtez Lavalink**
-   ```bash
-   pm2 stop lavalink
-   ```
-
-2. **Téléchargez la nouvelle version**
-   ```bash
-   cd /chemin/vers/ZenBeat
-   node download-lavalink.js
-   ```
-
-3. **Redémarrez Lavalink**
-   ```bash
-   pm2 restart lavalink
-   ```
-
-### Automatisation avec Cron
-
-Vous pouvez configurer une tâche cron pour vérifier et appliquer automatiquement les mises à jour :
-
-```bash
-# Ouvrir l'éditeur crontab
-crontab -e
-
-# Ajouter cette ligne pour exécuter le script tous les jours à 3h du matin
-0 3 * * * cd /chemin/vers/ZenBeat && ./update.sh >> /chemin/vers/ZenBeat/update.log 2>&1
-```
-
-## Résolution des problèmes
-
-Si vous rencontrez des problèmes après une mise à jour :
-
-1. **Vérifiez les logs**
-   ```bash
-   pm2 logs zenbeat
-   ```
-
-2. **Restaurez une version précédente** si nécessaire
-   ```bash
-   cd /chemin/vers/ZenBeat
-   git reset --hard HEAD~1  # Revenir à la version précédente
-   pm2 restart zenbeat
-   ```
-
-3. **Restaurez vos sauvegardes**
-   ```bash
-   cp ~/backups/zenbeat/YYYY-MM-DD/.env /chemin/vers/ZenBeat/
-   cp ~/backups/zenbeat/YYYY-MM-DD/config.json /chemin/vers/ZenBeat/
+En suivant ce guide, vous devriez être en mesure de maintenir votre bot ZenBeat à jour sur votre VPS avec un minimum d'effort et de temps d'arrêt. Si vous rencontrez des problèmes non couverts ici, n'hésitez pas à consulter la documentation ou à demander de l'aide sur le serveur Discord de support.

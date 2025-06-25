@@ -38,38 +38,47 @@ if (!result || result.loadType === 'error' || result.loadType === 'empty') {
   throw new Error('Aucun résultat trouvé pour cette recherche!');
 }
 
-// Après
+// Après (version améliorée)
 logDebug(`Recherche avec la requête: ${searchQuery}`);
-let result;
+let result = null;
+
+// Première tentative avec la requête originale
 try {
   result = await node.rest.resolve(searchQuery);
   logDebug(`Résultat de la recherche:`, result);
+  
+  // Vérifier si le résultat est valide
+  if (!result || result.loadType === 'error' || result.loadType === 'empty') {
+    logDebug(`Aucun résultat valide trouvé pour la requête: ${searchQuery}`);
+    result = null;
+  }
 } catch (error) {
   logDebug(`Erreur lors de la recherche: ${error.message}`);
-  throw new Error(`Erreur lors de la recherche: ${error.message}`);
+  result = null;
 }
 
-if (!result || result.loadType === 'error' || result.loadType === 'empty') {
-  logDebug(`Aucun résultat trouvé pour la requête: ${searchQuery}`, result);
+// Si la première recherche a échoué et que ce n'était pas déjà une recherche YouTube, essayer une recherche YouTube directe
+if (!result && !searchQuery.startsWith('ytsearch:')) {
+  const ytSearchQuery = `ytsearch:${query}`;
+  logDebug(`Tentative de recherche YouTube directe: ${ytSearchQuery}`);
   
-  // Essayer une recherche YouTube directe si ce n'était pas déjà une recherche
-  if (!searchQuery.startsWith('ytsearch:')) {
-    logDebug(`Tentative de recherche YouTube directe pour: ${query}`);
-    try {
-      const ytResult = await node.rest.resolve(`ytsearch:${query}`);
-      if (ytResult && ytResult.loadType !== 'error' && ytResult.loadType !== 'empty') {
-        logDebug(`Recherche YouTube réussie`, ytResult);
-        result = ytResult;
-      } else {
-        throw new Error('Aucun résultat trouvé pour cette recherche!');
-      }
-    } catch (error) {
-      logDebug(`Échec de la recherche YouTube: ${error.message}`);
-      throw new Error('Aucun résultat trouvé pour cette recherche!');
+  try {
+    const ytResult = await node.rest.resolve(ytSearchQuery);
+    logDebug(`Résultat de la recherche YouTube:`, ytResult);
+    
+    if (ytResult && ytResult.loadType !== 'error' && ytResult.loadType !== 'empty') {
+      logDebug(`Recherche YouTube réussie`);
+      result = ytResult;
     }
-  } else {
-    throw new Error('Aucun résultat trouvé pour cette recherche!');
+  } catch (error) {
+    logDebug(`Échec de la recherche YouTube: ${error.message}`);
   }
+}
+
+// Si aucune recherche n'a donné de résultat, lancer une erreur
+if (!result) {
+  logDebug(`Aucun résultat trouvé après toutes les tentatives de recherche`);
+  throw new Error('Aucun résultat trouvé pour cette recherche!');
 }
 ```
 
@@ -83,6 +92,21 @@ Pour vérifier que la correction fonctionne :
    - Recherche par mots-clés (ex: `/play never gonna give you up`)
    - URL Spotify (si LavaSrc est configuré)
 3. Vérifiez les logs pour voir le processus de recherche détaillé
+
+## Améliorations supplémentaires
+
+La dernière version du code apporte plusieurs améliorations importantes :
+
+1. **Élimination des doublons** : Le code a été restructuré pour éviter les doublons dans la gestion des erreurs, ce qui pourrait causer des problèmes de propagation d'erreurs.
+
+2. **Gestion plus robuste des erreurs** : Au lieu de lancer des erreurs à plusieurs endroits, le code utilise maintenant une approche plus structurée :
+   - Initialisation de `result` à `null`
+   - Tentatives de recherche qui mettent à jour `result` en cas de succès
+   - Une seule vérification finale pour lancer l'erreur si aucun résultat n'a été trouvé
+
+3. **Meilleure lisibilité** : Le code est maintenant plus facile à comprendre et à maintenir, avec des commentaires clairs et une structure logique.
+
+4. **Journalisation plus cohérente** : Les messages de log sont plus informatifs et cohérents, ce qui facilite le débogage.
 
 ## Conseils supplémentaires
 

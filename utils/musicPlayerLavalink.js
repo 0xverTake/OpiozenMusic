@@ -124,16 +124,63 @@ class MusicPlayer {
   // Get a node from Shoukaku
   getNode() {
     try {
-      // Get the first available node using the nodes Map
-      const nodes = Array.from(this.shoukaku.nodes.values());
-      const availableNode = nodes.find(node => node.state === 1) || nodes[0];
-      
-      if (!availableNode) {
-        logDebug("❌ Erreur: No available nodes found in the nodes Map");
-        throw new Error("No available nodes");
+      // Vérifier si l'instance Shoukaku existe
+      if (!this.shoukaku) {
+        logDebug("❌ Erreur: L'instance Shoukaku n'est pas initialisée");
+        throw new Error("L'instance Shoukaku n'est pas initialisée");
       }
       
-      return availableNode;
+      // Vérifier si la Map des nœuds existe
+      if (!this.shoukaku.nodes || !(this.shoukaku.nodes instanceof Map)) {
+        logDebug("❌ Erreur: La Map des nœuds n'est pas disponible");
+        throw new Error("La Map des nœuds n'est pas disponible");
+      }
+      
+      // Vérifier si des nœuds sont disponibles
+      if (this.shoukaku.nodes.size === 0) {
+        logDebug("❌ Erreur: Aucun nœud n'est configuré");
+        throw new Error("Aucun nœud n'est configuré");
+      }
+      
+      // Essayer d'utiliser la méthode getNode de Shoukaku si elle existe
+      if (typeof this.shoukaku.getNode === 'function') {
+        try {
+          const node = this.shoukaku.getNode();
+          if (node) {
+            logDebug(`✅ Nœud obtenu via shoukaku.getNode(): ${node.name}`);
+            return node;
+          }
+        } catch (innerError) {
+          logDebug(`⚠️ Erreur avec shoukaku.getNode(): ${innerError.message}, utilisation de la méthode de secours`);
+        }
+      }
+      
+      // Méthode de secours: obtenir manuellement un nœud disponible
+      const nodes = Array.from(this.shoukaku.nodes.values());
+      
+      // Journaliser l'état de tous les nœuds pour le débogage
+      logDebug(`État des nœuds (${nodes.length} nœuds au total):`);
+      nodes.forEach((node, index) => {
+        logDebug(`Nœud ${index + 1} (${node.name}): ${node.state === 1 ? 'Connecté' : 'Déconnecté'}`);
+      });
+      
+      // Trouver un nœud disponible (état = 1 signifie connecté)
+      const availableNode = nodes.find(node => node.state === 1);
+      
+      if (availableNode) {
+        logDebug(`✅ Nœud disponible trouvé: ${availableNode.name}`);
+        return availableNode;
+      }
+      
+      // Si aucun nœud n'est disponible mais qu'il y a des nœuds configurés, utiliser le premier
+      if (nodes.length > 0) {
+        logDebug(`⚠️ Aucun nœud disponible, utilisation du premier nœud: ${nodes[0].name}`);
+        return nodes[0];
+      }
+      
+      // Aucun nœud disponible
+      logDebug("❌ Erreur: Aucun nœud disponible");
+      throw new Error("Aucun nœud disponible");
     } catch (error) {
       logDebug(`❌ Erreur lors de la récupération d'un nœud: ${error.message}`);
       throw error;
@@ -290,6 +337,12 @@ class MusicPlayer {
     let playlist = false;
     
     try {
+      // Vérifier si l'interaction est valide
+      if (!interaction || !interaction.guild || !interaction.member) {
+        logDebug("❌ Erreur: Interaction invalide");
+        throw new Error("Interaction invalide");
+      }
+      
       // Vérifier si des nœuds sont disponibles
       const node = this.getNode();
       if (!node) {
@@ -314,36 +367,45 @@ class MusicPlayer {
       
       // Search for the song
       logDebug(`Recherche avec la requête: ${searchQuery}`);
-      let result;
+      let result = null;
+      
+      // Première tentative avec la requête originale
       try {
         result = await node.rest.resolve(searchQuery);
         logDebug(`Résultat de la recherche:`, result);
+        
+        // Vérifier si le résultat est valide
+        if (!result || result.loadType === 'error' || result.loadType === 'empty') {
+          logDebug(`Aucun résultat valide trouvé pour la requête: ${searchQuery}`);
+          result = null;
+        }
       } catch (error) {
         logDebug(`Erreur lors de la recherche: ${error.message}`);
-        throw new Error(`Erreur lors de la recherche: ${error.message}`);
+        result = null;
       }
       
-      if (!result || result.loadType === 'error' || result.loadType === 'empty') {
-        logDebug(`Aucun résultat trouvé pour la requête: ${searchQuery}`, result);
+      // Si la première recherche a échoué et que ce n'était pas déjà une recherche YouTube, essayer une recherche YouTube directe
+      if (!result && !searchQuery.startsWith('ytsearch:')) {
+        const ytSearchQuery = `ytsearch:${query}`;
+        logDebug(`Tentative de recherche YouTube directe: ${ytSearchQuery}`);
         
-        // Essayer une recherche YouTube directe si ce n'était pas déjà une recherche
-        if (!searchQuery.startsWith('ytsearch:')) {
-          logDebug(`Tentative de recherche YouTube directe pour: ${query}`);
-          try {
-            const ytResult = await node.rest.resolve(`ytsearch:${query}`);
-            if (ytResult && ytResult.loadType !== 'error' && ytResult.loadType !== 'empty') {
-              logDebug(`Recherche YouTube réussie`, ytResult);
-              result = ytResult;
-            } else {
-              throw new Error('Aucun résultat trouvé pour cette recherche!');
-            }
-          } catch (error) {
-            logDebug(`Échec de la recherche YouTube: ${error.message}`);
-            throw new Error('Aucun résultat trouvé pour cette recherche!');
+        try {
+          const ytResult = await node.rest.resolve(ytSearchQuery);
+          logDebug(`Résultat de la recherche YouTube:`, ytResult);
+          
+          if (ytResult && ytResult.loadType !== 'error' && ytResult.loadType !== 'empty') {
+            logDebug(`Recherche YouTube réussie`);
+            result = ytResult;
           }
-        } else {
-          throw new Error('Aucun résultat trouvé pour cette recherche!');
+        } catch (error) {
+          logDebug(`Échec de la recherche YouTube: ${error.message}`);
         }
+      }
+      
+      // Si aucune recherche n'a donné de résultat, lancer une erreur
+      if (!result) {
+        logDebug(`Aucun résultat trouvé après toutes les tentatives de recherche`);
+        throw new Error('Aucun résultat trouvé pour cette recherche!');
       }
       
       // Handle different result types
@@ -438,8 +500,22 @@ class MusicPlayer {
       
       return { songInfo, playlist };
     } catch (error) {
-      console.error(error);
-      throw new Error(`Erreur lors de l'ajout de la chanson: ${error.message}`);
+      // Journaliser l'erreur complète pour le débogage
+      logDebug(`❌ Erreur complète lors de l'ajout de la chanson:`, error);
+      
+      // Formater un message d'erreur plus convivial
+      let errorMessage = error.message;
+      
+      // Personnaliser certains messages d'erreur courants
+      if (errorMessage.includes("No available nodes")) {
+        errorMessage = "Aucun serveur de musique disponible. Veuillez réessayer plus tard.";
+      } else if (errorMessage.includes("Aucun résultat trouvé")) {
+        errorMessage = "Aucun résultat trouvé pour cette recherche. Essayez avec des mots-clés différents.";
+      } else if (errorMessage.includes("Vous devez être dans un salon vocal")) {
+        errorMessage = "Vous devez être dans un salon vocal pour utiliser cette commande!";
+      }
+      
+      throw new Error(`Erreur lors de l'ajout de la chanson: ${errorMessage}`);
     }
   }
   
