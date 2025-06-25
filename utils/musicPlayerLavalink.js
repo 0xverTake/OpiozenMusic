@@ -1,4 +1,4 @@
-const { Manager } = require('erela.js');
+const { Shoukaku, Connectors } = require('shoukaku');
 const { EmbedBuilder } = require('discord.js');
 const { embedColor } = require('../config.json');
 
@@ -38,9 +38,18 @@ function detectSourceType(query) {
   }
 }
 
+// Format the duration
+function formatDuration(ms) {
+  const minutes = Math.floor(ms / 60000);
+  const seconds = ((ms % 60000) / 1000).toFixed(0);
+  return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+}
+
 class MusicPlayer {
   constructor(client) {
     this.client = client;
+    this.players = new Map();
+    this.queues = new Map();
     
     // Récupérer les paramètres de configuration
     const host = process.env.LAVALINK_HOST || '127.0.0.1';
@@ -52,25 +61,25 @@ class MusicPlayer {
     logDebug(`Initialisation de la connexion Lavalink avec les paramètres suivants:`);
     logDebug(`Host: ${host}, Port: ${port}, Secure: ${secure}, Password: ${password ? '****' : 'non défini'}`);
     
-    this.manager = new Manager({
-      // Define the nodes (Lavalink servers)
-      nodes: [
+    // Initialize Shoukaku
+    this.shoukaku = new Shoukaku(
+      new Connectors.DiscordJS(client), 
+      [
         {
-          identifier: 'Main Node',
-          host: host,
-          port: port,
-          password: password,
-          secure: secure,
-          retryAmount: 10,
-          retryDelay: 5000,
-        },
+          name: 'Main Node',
+          url: `${secure ? 'wss' : 'ws'}://${host}:${port}/v4/websocket`,
+          auth: password,
+          secure: secure
+        }
       ],
-      // Method to send voice data to Discord
-      send: (id, payload) => {
-        const guild = client.guilds.cache.get(id);
-        if (guild) guild.shard.send(payload);
-      },
-    });
+      {
+        moveOnDisconnect: false,
+        resume: true,
+        resumeTimeout: 30,
+        reconnectTries: 10,
+        restTimeout: 10000
+      }
+    );
 
     // Initialize event listeners
     this.initEvents();
@@ -79,99 +88,54 @@ class MusicPlayer {
   // Initialize the manager and set up event listeners
   initEvents() {
     // Node events
-    this.manager.on('nodeConnect', (node) => {
-      logDebug(`✅ Node ${node.options.identifier} connected.`);
+    this.shoukaku.on('ready', (name) => {
+      logDebug(`✅ Node ${name} connected.`);
     });
 
-    this.manager.on('nodeError', (node, error) => {
-      logDebug(`❌ Node ${node.options.identifier} had an error: ${error.message}`);
+    this.shoukaku.on('error', (name, error) => {
+      logDebug(`❌ Node ${name} had an error: ${error.message}`);
       logDebug('Détails de l\'erreur:', error);
-      
-      // Tentative de reconnexion après erreur
-      setTimeout(() => {
-        logDebug(`Tentative de reconnexion au nœud ${node.options.identifier}...`);
-        node.connect();
-      }, 5000);
     });
 
-    this.manager.on('nodeDisconnect', (node) => {
-      logDebug(`⚠️ Node ${node.options.identifier} disconnected.`);
-      
-      // Tentative de reconnexion après déconnexion
-      setTimeout(() => {
-        logDebug(`Tentative de reconnexion au nœud ${node.options.identifier}...`);
-        node.connect();
-      }, 5000);
+    this.shoukaku.on('disconnect', (name, reason) => {
+      logDebug(`⚠️ Node ${name} disconnected. Reason: ${reason}`);
     });
 
-    // Player events
-    this.manager.on('playerCreate', (player) => {
-      console.log(`Player created in guild ${player.guild}`);
-    });
-
-    this.manager.on('playerDestroy', (player) => {
-      console.log(`Player destroyed in guild ${player.guild}`);
-    });
-
-    this.manager.on('trackStart', (player, track) => {
-      const channel = this.client.channels.cache.get(player.textChannel);
-      if (channel) this.sendNowPlayingEmbed(channel, track, player);
-    });
-
-    this.manager.on('trackEnd', (player) => {
-      // Track ended, nothing to do as the next track will automatically play
-    });
-
-    this.manager.on('trackStuck', (player, track) => {
-      const channel = this.client.channels.cache.get(player.textChannel);
-      if (channel) channel.send(`❌ La piste ${track.title} est bloquée. Passage à la suivante...`);
-      player.stop();
-    });
-
-    this.manager.on('trackError', (player, track, error) => {
-      const channel = this.client.channels.cache.get(player.textChannel);
-      if (channel) channel.send(`❌ Erreur lors de la lecture de ${track.title}: ${error.message}`);
-      player.stop();
-    });
-
-    this.manager.on('queueEnd', (player) => {
-      const channel = this.client.channels.cache.get(player.textChannel);
-      if (channel) {
-        channel.send({
-          embeds: [
-            new EmbedBuilder()
-              .setColor(embedColor)
-              .setDescription('🎵 La file d\'attente est vide. Ajoutez des chansons avec `/play`!')
-          ]
-        });
-      }
-      
-      // Disconnect after 5 minutes of inactivity
-      setTimeout(() => {
-        if (player.queue.size === 0 && !player.playing) {
-          channel.send('👋 Déconnexion du salon vocal après 5 minutes d\'inactivité.');
-          player.destroy();
-        }
-      }, 5 * 60 * 1000);
+    this.shoukaku.on('reconnecting', (name) => {
+      logDebug(`🔄 Node ${name} is reconnecting...`);
     });
 
     // Initialize the manager when the client is ready
     this.client.once('ready', () => {
       logDebug(`Initialisation du gestionnaire Lavalink avec l'ID utilisateur ${this.client.user.id}`);
-      this.manager.init(this.client.user.id);
       
       // Vérifier l'état des nœuds après initialisation
       setTimeout(() => {
-        const nodes = this.manager.nodes;
+        const nodes = this.shoukaku.nodes;
         logDebug(`État des nœuds après initialisation:`);
-        nodes.forEach(node => {
-          logDebug(`- ${node.options.identifier}: ${node.connected ? 'Connecté' : 'Déconnecté'}`);
+        nodes.forEach((node, name) => {
+          logDebug(`- ${name}: ${node.state === 1 ? 'Connecté' : 'Déconnecté'}`);
         });
       }, 5000);
     });
+  }
 
-    // Handle voice state updates for users
-    this.client.on('raw', (d) => this.manager.updateVoiceState(d));
+  // Get or create a player for a guild
+  async getPlayer(guildId) {
+    return this.players.get(guildId);
+  }
+
+  // Get or create a queue for a guild
+  getQueue(guildId) {
+    if (!this.queues.has(guildId)) {
+      this.queues.set(guildId, {
+        tracks: [],
+        current: null,
+        loop: false,
+        volume: 100
+      });
+    }
+    return this.queues.get(guildId);
   }
 
   // Connect to a voice channel and create a player
@@ -182,18 +146,120 @@ class MusicPlayer {
       throw new Error('Vous devez être dans un salon vocal pour utiliser cette commande!');
     }
     
-    // Get or create a player
-    const player = this.manager.create({
-      guild: interaction.guild.id,
-      voiceChannel: channel.id,
-      textChannel: interaction.channel.id,
-      selfDeafen: true,
+    // Check if a player already exists
+    if (this.players.has(interaction.guild.id)) {
+      return this.players.get(interaction.guild.id);
+    }
+    
+    try {
+      // Get the node
+      const node = this.shoukaku.getNode();
+      if (!node) throw new Error("No available nodes");
+      
+      // Create a player
+      const player = await node.joinChannel({
+        guildId: interaction.guild.id,
+        channelId: channel.id,
+        shardId: interaction.guild.shardId || 0,
+        deaf: true
+      });
+      
+      // Store the player and create a queue
+      this.players.set(interaction.guild.id, player);
+      this.getQueue(interaction.guild.id);
+      
+      // Set up player events
+      this.setupPlayerEvents(player, interaction.guild.id, interaction.channel.id);
+      
+      return player;
+    } catch (error) {
+      logDebug(`Error connecting to voice channel: ${error.message}`);
+      throw error;
+    }
+  }
+  
+  // Set up player events
+  setupPlayerEvents(player, guildId, textChannelId) {
+    player.on('start', () => {
+      const queue = this.getQueue(guildId);
+      if (queue.current) {
+        const channel = this.client.channels.cache.get(textChannelId);
+        if (channel) this.sendNowPlayingEmbed(channel, queue.current, guildId);
+      }
     });
     
-    // Connect to the voice channel
-    player.connect();
+    player.on('end', () => {
+      const queue = this.getQueue(guildId);
+      
+      // If loop is enabled, add the current track back to the queue
+      if (queue.loop && queue.current) {
+        queue.tracks.push(queue.current);
+      }
+      
+      // If there are more tracks in the queue, play the next one
+      if (queue.tracks.length > 0) {
+        const nextTrack = queue.tracks.shift();
+        queue.current = nextTrack;
+        this.playTrack(guildId, nextTrack);
+      } else {
+        // Queue is empty
+        queue.current = null;
+        const channel = this.client.channels.cache.get(textChannelId);
+        if (channel) {
+          channel.send({
+            embeds: [
+              new EmbedBuilder()
+                .setColor(embedColor)
+                .setDescription('🎵 La file d\'attente est vide. Ajoutez des chansons avec `/play`!')
+            ]
+          });
+        }
+        
+        // Disconnect after 5 minutes of inactivity
+        setTimeout(() => {
+          if (!queue.current && this.players.has(guildId)) {
+            const player = this.players.get(guildId);
+            if (player) {
+              const channel = this.client.channels.cache.get(textChannelId);
+              if (channel) {
+                channel.send('👋 Déconnexion du salon vocal après 5 minutes d\'inactivité.');
+              }
+              this.destroy(guildId);
+            }
+          }
+        }, 5 * 60 * 1000);
+      }
+    });
     
-    return player;
+    player.on('exception', (error) => {
+      logDebug(`Player exception: ${error.message}`);
+      const channel = this.client.channels.cache.get(textChannelId);
+      if (channel) {
+        channel.send(`❌ Erreur lors de la lecture: ${error.message}`);
+      }
+      
+      // Skip to the next track
+      this.skip(guildId);
+    });
+    
+    player.on('closed', (reason) => {
+      logDebug(`Player connection closed: ${reason}`);
+      this.players.delete(guildId);
+    });
+  }
+  
+  // Play a track
+  async playTrack(guildId, track) {
+    const player = this.players.get(guildId);
+    if (!player) return false;
+    
+    try {
+      await player.playTrack({ track: track.encoded });
+      return true;
+    } catch (error) {
+      logDebug(`Error playing track: ${error.message}`);
+      return false;
+    }
   }
   
   // Add a song to the queue
@@ -203,26 +269,15 @@ class MusicPlayer {
     
     try {
       // Vérifier si des nœuds sont disponibles
-      if (this.manager.nodes.size === 0) {
-        logDebug("❌ Erreur: Aucun nœud Lavalink n'est configuré");
-        throw new Error("Aucun nœud Lavalink n'est configuré");
-      }
-      
-      // Vérifier si des nœuds sont connectés
-      const connectedNodes = Array.from(this.manager.nodes.values()).filter(node => node.connected);
-      if (connectedNodes.length === 0) {
-        logDebug("❌ Erreur: No available nodes. Aucun nœud Lavalink n'est connecté");
-        
-        // Afficher l'état de tous les nœuds
-        this.manager.nodes.forEach(node => {
-          logDebug(`- Nœud ${node.options.identifier}: ${node.connected ? 'Connecté' : 'Déconnecté'}`);
-        });
-        
+      const node = this.shoukaku.getNode();
+      if (!node) {
+        logDebug("❌ Erreur: No available nodes");
         throw new Error("No available nodes");
       }
       
       // Get or create a player
-      const player = this.manager.players.get(interaction.guild.id) || await this.connect(interaction);
+      const player = await this.connect(interaction);
+      const queue = this.getQueue(interaction.guild.id);
       
       // Détecter le type de source
       const sourceType = detectSourceType(query);
@@ -236,72 +291,95 @@ class MusicPlayer {
       }
       
       // Search for the song
-      const res = await this.manager.search(searchQuery, interaction.user);
+      const result = await node.rest.resolve(searchQuery);
+      
+      if (!result || result.loadType === 'error' || result.loadType === 'empty') {
+        throw new Error('Aucun résultat trouvé pour cette recherche!');
+      }
       
       // Handle different result types
-      switch (res.loadType) {
-        case 'TRACK_LOADED': {
+      switch (result.loadType) {
+        case 'track': {
           // Single track loaded
-          player.queue.add(res.tracks[0]);
-          songInfo = {
-            title: res.tracks[0].title,
-            url: res.tracks[0].uri,
-            thumbnail: res.tracks[0].thumbnail || null,
-            duration: res.tracks[0].duration,
-            requestedBy: interaction.user.tag,
-            source: res.tracks[0].sourceName || detectSourceType(res.tracks[0].uri)
-          };
+          const track = result.data;
           
-          if (!player.playing && !player.paused && !player.queue.size) {
-            player.play();
+          // Add metadata
+          track.requester = interaction.user;
+          track.thumbnail = `https://img.youtube.com/vi/${track.info.identifier}/maxresdefault.jpg`;
+          
+          // Add to queue
+          if (!queue.current) {
+            queue.current = track;
+            this.playTrack(interaction.guild.id, track);
+          } else {
+            queue.tracks.push(track);
           }
+          
+          songInfo = {
+            title: track.info.title,
+            url: track.info.uri,
+            thumbnail: track.thumbnail,
+            duration: track.info.length,
+            requestedBy: interaction.user.tag,
+            source: sourceType
+          };
           break;
         }
         
-        case 'PLAYLIST_LOADED': {
+        case 'playlist': {
           // Playlist loaded
           playlist = true;
+          const tracks = result.data.tracks;
           
-          // Add all tracks to the queue
-          player.queue.add(res.tracks);
+          // Add metadata to each track
+          tracks.forEach(track => {
+            track.requester = interaction.user;
+            track.thumbnail = `https://img.youtube.com/vi/${track.info.identifier}/maxresdefault.jpg`;
+          });
+          
+          // Add to queue
+          if (!queue.current) {
+            queue.current = tracks[0];
+            queue.tracks.push(...tracks.slice(1));
+            this.playTrack(interaction.guild.id, tracks[0]);
+          } else {
+            queue.tracks.push(...tracks);
+          }
           
           songInfo = {
-            title: res.playlist.name,
+            title: result.data.info.name,
             url: query,
-            count: res.tracks.length,
-            source: detectSourceType(query)
+            count: tracks.length,
+            source: sourceType
           };
-          
-          if (!player.playing && !player.paused && !player.queue.size) {
-            player.play();
-          }
           break;
         }
         
-        case 'SEARCH_RESULT': {
+        case 'search': {
           // Search result, use the first result
-          player.queue.add(res.tracks[0]);
-          songInfo = {
-            title: res.tracks[0].title,
-            url: res.tracks[0].uri,
-            thumbnail: res.tracks[0].thumbnail || null,
-            duration: res.tracks[0].duration,
-            requestedBy: interaction.user.tag,
-            source: res.tracks[0].sourceName || 'youtube'
-          };
+          const track = result.data[0];
           
-          if (!player.playing && !player.paused && !player.queue.size) {
-            player.play();
+          // Add metadata
+          track.requester = interaction.user;
+          track.thumbnail = `https://img.youtube.com/vi/${track.info.identifier}/maxresdefault.jpg`;
+          
+          // Add to queue
+          if (!queue.current) {
+            queue.current = track;
+            this.playTrack(interaction.guild.id, track);
+          } else {
+            queue.tracks.push(track);
           }
+          
+          songInfo = {
+            title: track.info.title,
+            url: track.info.uri,
+            thumbnail: track.thumbnail,
+            duration: track.info.length,
+            requestedBy: interaction.user.tag,
+            source: 'youtube'
+          };
           break;
-        }
-        
-        case 'LOAD_FAILED': {
-          throw new Error(`Erreur lors du chargement: ${res.exception?.message || 'Erreur inconnue'}`);
-        }
-        
-        case 'NO_MATCHES': {
-          throw new Error('Aucun résultat trouvé pour cette recherche!');
         }
         
         default: {
@@ -318,119 +396,122 @@ class MusicPlayer {
   
   // Skip the current song
   skip(guildId) {
-    const player = this.manager.players.get(guildId);
+    const player = this.players.get(guildId);
     if (!player) return false;
     
-    player.stop();
+    player.stopTrack();
     return true;
   }
   
   // Pause the current song
   pause(guildId) {
-    const player = this.manager.players.get(guildId);
-    if (!player || player.paused) return false;
+    const player = this.players.get(guildId);
+    if (!player) return false;
     
-    player.pause(true);
+    player.setPaused(true);
     return true;
   }
   
   // Resume the current song
   resume(guildId) {
-    const player = this.manager.players.get(guildId);
-    if (!player || !player.paused) return false;
+    const player = this.players.get(guildId);
+    if (!player) return false;
     
-    player.pause(false);
+    player.setPaused(false);
     return true;
   }
   
   // Stop playing and clear the queue
   stop(guildId) {
-    const player = this.manager.players.get(guildId);
+    const player = this.players.get(guildId);
     if (!player) return false;
     
-    player.queue.clear();
-    player.stop();
+    const queue = this.getQueue(guildId);
+    queue.tracks = [];
+    queue.current = null;
+    
+    player.stopTrack();
     return true;
   }
   
   // Toggle loop mode
   toggleLoop(guildId) {
-    const player = this.manager.players.get(guildId);
-    if (!player) return false;
-    
-    player.setTrackRepeat(!player.trackRepeat);
-    return player.trackRepeat;
+    const queue = this.getQueue(guildId);
+    queue.loop = !queue.loop;
+    return queue.loop;
   }
   
   // Set the volume
   setVolume(guildId, volume) {
-    const player = this.manager.players.get(guildId);
+    const player = this.players.get(guildId);
     if (!player) return false;
     
     if (volume < 0 || volume > 100) {
       throw new Error('Le volume doit être compris entre 0 et 100!');
     }
     
-    player.setVolume(volume);
+    player.setVolume(volume / 100);
+    
+    const queue = this.getQueue(guildId);
+    queue.volume = volume;
+    
     return volume;
   }
   
   // Get the current queue
-  getQueue(guildId) {
-    const player = this.manager.players.get(guildId);
-    if (!player) return null;
+  getQueueInfo(guildId) {
+    const queue = this.getQueue(guildId);
+    if (!queue) return null;
     
     return {
-      current: player.queue.current ? {
-        title: player.queue.current.title,
-        url: player.queue.current.uri,
-        thumbnail: player.queue.current.thumbnail || null,
-        duration: player.queue.current.duration,
-        requestedBy: player.queue.current.requester.tag
+      current: queue.current ? {
+        title: queue.current.info.title,
+        url: queue.current.info.uri,
+        thumbnail: queue.current.thumbnail,
+        duration: queue.current.info.length,
+        requestedBy: queue.current.requester.tag
       } : null,
-      queue: player.queue.map(track => ({
-        title: track.title,
-        url: track.uri,
-        thumbnail: track.thumbnail || null,
-        duration: track.duration,
+      queue: queue.tracks.map(track => ({
+        title: track.info.title,
+        url: track.info.uri,
+        thumbnail: track.thumbnail,
+        duration: track.info.length,
         requestedBy: track.requester.tag
       })),
-      loop: player.trackRepeat,
-      volume: player.volume
+      loop: queue.loop,
+      volume: queue.volume
     };
   }
   
   // Destroy the player and disconnect
   destroy(guildId) {
-    const player = this.manager.players.get(guildId);
+    const player = this.players.get(guildId);
     if (!player) return false;
     
-    player.destroy();
+    player.connection.disconnect();
+    this.players.delete(guildId);
+    this.queues.delete(guildId);
+    
     return true;
   }
   
   // Send a now playing embed
-  sendNowPlayingEmbed(channel, track, player) {
+  sendNowPlayingEmbed(channel, track, guildId) {
     if (!channel) return;
     
-    // Format the duration
-    const formatDuration = (ms) => {
-      const minutes = Math.floor(ms / 60000);
-      const seconds = ((ms % 60000) / 1000).toFixed(0);
-      return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
-    };
+    const queue = this.getQueue(guildId);
     
     // Create the embed
     const embed = new EmbedBuilder()
       .setColor(embedColor)
       .setTitle('🎵 Lecture en cours')
-      .setDescription(`[${track.title}](${track.uri})`)
+      .setDescription(`[${track.info.title}](${track.info.uri})`)
       .addFields(
-        { name: '⏱️ Durée', value: formatDuration(track.duration), inline: true },
+        { name: '⏱️ Durée', value: formatDuration(track.info.length), inline: true },
         { name: '👤 Demandé par', value: track.requester.tag, inline: true },
-        { name: '🔄 Mode boucle', value: player.trackRepeat ? 'Activé' : 'Désactivé', inline: true }
+        { name: '🔄 Mode boucle', value: queue.loop ? 'Activé' : 'Désactivé', inline: true }
       )
-      .setFooter({ text: `ZenBeat - ${player.queue.size} chanson(s) dans la file d'attente` })
+      .setFooter({ text: `ZenBeat - ${queue.tracks.length} chanson(s) dans la file d'attente` })
       .setTimestamp();
     
     // Add thumbnail if available

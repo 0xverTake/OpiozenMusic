@@ -29,6 +29,7 @@
     "erela.js": "^2.4.0",
     "play-dl": "^1.9.7",
     "puppeteer": "^24.10.2",
+    "shoukaku": "^4.1.1",
     "ytdl-core": "^4.11.5"
   },
   "engines": {

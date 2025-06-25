@@ -9,7 +9,7 @@ module.exports = {
   async execute(interaction) {
     try {
       const musicPlayer = interaction.client.musicPlayer;
-      const queueData = musicPlayer.getQueue(interaction.guildId);
+      const queueData = musicPlayer.getQueueInfo(interaction.guildId);
       
       if (!queueData || !queueData.current) {
         await interaction.reply('❌ Il n\'y a pas de musique en cours de lecture!');
