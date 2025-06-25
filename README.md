@@ -160,6 +160,7 @@ Si vous rencontrez des problèmes, consultez nos guides de dépannage :
 - [NO_AVAILABLE_NODES_FIX.md](NO_AVAILABLE_NODES_FIX.md) - Pour les problèmes de connexion à Lavalink
 - [TOKEN_ERROR_FIX.md](TOKEN_ERROR_FIX.md) - Pour les problèmes d'authentification Discord
 - [SHOUKAKU_V4_API_FIX.md](SHOUKAKU_V4_API_FIX.md) - Pour l'erreur "node.joinChannel is not a function"
+- [LAVALINK_SEARCH_FIX.md](LAVALINK_SEARCH_FIX.md) - Pour les problèmes de recherche de chansons
 
 ## 📋 Guides
 
@@ -171,6 +172,7 @@ Si vous rencontrez des problèmes, consultez nos guides de dépannage :
 - [UPDATE_GUIDE.md](UPDATE_GUIDE.md) - Comment mettre à jour le bot sur un VPS
 - [LAVALINK_V4_UPDATE.md](LAVALINK_V4_UPDATE.md) - Mise à jour vers Lavalink v4
 - [SHOUKAKU_V4_API_FIX.md](SHOUKAKU_V4_API_FIX.md) - Correction de l'erreur "node.joinChannel is not a function"
+- [LAVALINK_SEARCH_FIX.md](LAVALINK_SEARCH_FIX.md) - Correction des problèmes de recherche avec Lavalink
 
 ## 📝 Licence
 

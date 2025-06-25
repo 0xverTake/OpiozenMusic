@@ -62,5 +62,6 @@ Pour vérifier que la correction fonctionne :
     node: "NOM_DU_NOEUD" // Optionnel, spécifie quel nœud utiliser
   });
   ```
+  
 - Si vous mettez à jour Shoukaku vers une version ultérieure, vérifiez la documentation pour vous assurer que l'API n'a pas changé à nouveau
 - Pour plus d'informations sur l'API de Shoukaku, consultez la documentation officielle : https://github.com/Deivu/Shoukaku

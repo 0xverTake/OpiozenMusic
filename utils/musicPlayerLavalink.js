@@ -313,10 +313,37 @@ class MusicPlayer {
       }
       
       // Search for the song
-      const result = await node.rest.resolve(searchQuery);
+      logDebug(`Recherche avec la requête: ${searchQuery}`);
+      let result;
+      try {
+        result = await node.rest.resolve(searchQuery);
+        logDebug(`Résultat de la recherche:`, result);
+      } catch (error) {
+        logDebug(`Erreur lors de la recherche: ${error.message}`);
+        throw new Error(`Erreur lors de la recherche: ${error.message}`);
+      }
       
       if (!result || result.loadType === 'error' || result.loadType === 'empty') {
-        throw new Error('Aucun résultat trouvé pour cette recherche!');
+        logDebug(`Aucun résultat trouvé pour la requête: ${searchQuery}`, result);
+        
+        // Essayer une recherche YouTube directe si ce n'était pas déjà une recherche
+        if (!searchQuery.startsWith('ytsearch:')) {
+          logDebug(`Tentative de recherche YouTube directe pour: ${query}`);
+          try {
+            const ytResult = await node.rest.resolve(`ytsearch:${query}`);
+            if (ytResult && ytResult.loadType !== 'error' && ytResult.loadType !== 'empty') {
+              logDebug(`Recherche YouTube réussie`, ytResult);
+              result = ytResult;
+            } else {
+              throw new Error('Aucun résultat trouvé pour cette recherche!');
+            }
+          } catch (error) {
+            logDebug(`Échec de la recherche YouTube: ${error.message}`);
+            throw new Error('Aucun résultat trouvé pour cette recherche!');
+          }
+        } else {
+          throw new Error('Aucun résultat trouvé pour cette recherche!');
+        }
       }
       
       // Handle different result types
