@@ -33,34 +33,41 @@ module.exports = {
       if (customId.startsWith('music_')) {
         const command = customId.split('_')[1];
         const guildId = interaction.guildId;
-        const queue = interaction.client.musicQueue.get(guildId);
-        
-        if (!queue) {
-          await interaction.reply({ content: 'Il n\'y a pas de musique en cours de lecture!', ephemeral: true });
-          return;
-        }
+        const musicPlayer = interaction.client.musicPlayer;
         
         try {
           switch (command) {
             case 'skip':
               // Skip command logic
-              queue.skip();
-              await interaction.reply({ content: '⏭️ Musique passée!', ephemeral: true });
+              if (musicPlayer.skip(guildId)) {
+                await interaction.reply({ content: '⏭️ Musique passée!', ephemeral: true });
+              } else {
+                await interaction.reply({ content: 'Il n\'y a pas de musique en cours de lecture!', ephemeral: true });
+              }
               break;
             case 'pause':
               // Pause command logic
-              queue.pause();
-              await interaction.reply({ content: '⏸️ Musique mise en pause!', ephemeral: true });
+              if (musicPlayer.pause(guildId)) {
+                await interaction.reply({ content: '⏸️ Musique mise en pause!', ephemeral: true });
+              } else {
+                await interaction.reply({ content: 'La musique est déjà en pause ou il n\'y a pas de musique en cours de lecture!', ephemeral: true });
+              }
               break;
             case 'resume':
               // Resume command logic
-              queue.resume();
-              await interaction.reply({ content: '▶️ Musique reprise!', ephemeral: true });
+              if (musicPlayer.resume(guildId)) {
+                await interaction.reply({ content: '▶️ Musique reprise!', ephemeral: true });
+              } else {
+                await interaction.reply({ content: 'La musique n\'est pas en pause ou il n\'y a pas de musique en cours de lecture!', ephemeral: true });
+              }
               break;
             case 'stop':
               // Stop command logic
-              queue.stop();
-              await interaction.reply({ content: '⏹️ Musique arrêtée!', ephemeral: true });
+              if (musicPlayer.stop(guildId)) {
+                await interaction.reply({ content: '⏹️ Musique arrêtée!', ephemeral: true });
+              } else {
+                await interaction.reply({ content: 'Il n\'y a pas de musique en cours de lecture!', ephemeral: true });
+              }
               break;
             default:
               await interaction.reply({ content: 'Commande inconnue!', ephemeral: true });

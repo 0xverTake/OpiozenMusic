@@ -1,15 +1,26 @@
 # ZenBeat - Bot Musical Discord
 
-ZenBeat est un bot musical Discord qui prend en charge YouTube et SoundCloud avec des contrôles par boutons.
+ZenBeat est un bot musical Discord qui prend en charge YouTube, SoundCloud et d'autres plateformes avec des contrôles par boutons. Désormais compatible avec Lavalink pour une meilleure qualité audio et plus de fonctionnalités.
 
 ## Fonctionnalités
 
-- Lecture de musique depuis YouTube et SoundCloud
-- Prise en charge des playlists
+**Fonctionnalités avec Lavalink** (recommandé) :
+- Lecture de musique depuis YouTube (vidéos et playlists)
+- Lecture de musique depuis SoundCloud (pistes et playlists)
+- Support pour Twitch, Bandcamp, Vimeo et fichiers audio HTTP
+- Recherche par titre (pas besoin d'URL directe)
 - Contrôles par boutons (pause, reprise, passer, arrêter)
 - Mode boucle
 - Contrôle du volume
 - File d'attente de chansons
+
+**Fonctionnalités alternatives** (avec ytdl-core et @distube/ytdl-core) :
+- Lecture de musique depuis YouTube (vidéos individuelles uniquement)
+- Contrôles par boutons (pause, reprise, passer, arrêter)
+- Mode boucle
+- Contrôle du volume
+- File d'attente de chansons
+- Limitations : pas de playlists, pas de recherche, pas de SoundCloud
 
 ## Installation
 
@@ -18,9 +29,34 @@ ZenBeat est un bot musical Discord qui prend en charge YouTube et SoundCloud ave
 3. Copiez `config.json.example` en `config.json` et remplissez les informations nécessaires
 4. Démarrez le bot avec `npm start`
 
+## Utilisation avec Lavalink (Recommandé)
+
+Pour profiter de toutes les fonctionnalités, utilisez Lavalink :
+
+1. Installez Java 13 ou supérieur
+2. Téléchargez Lavalink depuis [GitHub](https://github.com/freyacodes/Lavalink/releases)
+3. Utilisez le fichier `application.yml` fourni
+4. Démarrez Lavalink avec `java -jar Lavalink.jar`
+5. Configurez les variables d'environnement pour le bot (voir ci-dessous)
+
+Pour des instructions détaillées, consultez le fichier [LAVALINK_GUIDE.md](LAVALINK_GUIDE.md).
+
+## Utilisation avec PM2 (Recommandé pour la production)
+
+Pour exécuter le bot en arrière-plan et le maintenir actif 24/7, vous pouvez utiliser PM2 :
+
+1. Installez PM2 globalement : `npm install -g pm2`
+2. Démarrez le bot avec PM2 : `pm2 start ecosystem.config.js`
+
+Ou utilisez simplement les scripts de démarrage fournis :
+- Sur Windows : exécutez `start-bot.bat`
+- Sur Linux/Mac : exécutez `./start-bot.sh`
+
+Pour plus d'informations sur l'utilisation de PM2, consultez le fichier [PM2_GUIDE.md](PM2_GUIDE.md).
+
 ## Configuration
 
-Vous pouvez configurer le bot de deux façons :
+Vous pouvez configurer le bot de plusieurs façons :
 
 ### 1. Utiliser config.json
 
@@ -41,48 +77,43 @@ Copiez `config.json.example` en `config.json` et remplissez les informations sui
 Créez un fichier `.env` à la racine du projet avec les variables suivantes :
 
 ```
+# Obligatoire
 TOKEN=VOTRE_TOKEN_DISCORD
+
+# Pour Lavalink (recommandé)
+LAVALINK_HOST=localhost
+LAVALINK_PORT=2333
+LAVALINK_PASSWORD=youshallnotpass
+LAVALINK_SECURE=false
+
+# Pour ytdl-core (alternative)
 YOUTUBE_COOKIE=VOTRE_COOKIE_YOUTUBE
 ```
 
-## Résoudre le problème "Sign in to confirm you're not a bot"
+## Méthodes de lecture audio
 
-Si vous rencontrez l'erreur "Sign in to confirm you're not a bot" lors de l'utilisation de la commande `/play`, suivez ces étapes pour résoudre le problème :
+### Méthode 1 : Utiliser Lavalink (Recommandé)
 
-### Méthode 1 : Utiliser le générateur de cookies
+Lavalink est un serveur audio autonome qui offre de nombreux avantages :
+- Meilleure qualité audio
+- Support pour plus de sources (YouTube, SoundCloud, Twitch, etc.)
+- Meilleure gestion des playlists
+- Recherche intégrée
+- Moins de problèmes avec les restrictions de YouTube
+- Performances améliorées
 
-1. Installez les dépendances nécessaires :
-   ```
-   npm install puppeteer dotenv
-   ```
+Voir [LAVALINK_GUIDE.md](LAVALINK_GUIDE.md) pour les instructions d'installation et d'utilisation.
 
-2. Exécutez le script de génération de cookies :
-   ```
-   node utils/generateCookies.js
-   ```
+### Méthode 2 : Utiliser ytdl-core et @distube/ytdl-core
 
-3. Suivez les instructions à l'écran pour vous connecter à YouTube et générer les cookies.
-
-4. Une fois les cookies générés, ils seront automatiquement enregistrés dans un fichier `.env.example`. Renommez ce fichier en `.env` ou copiez la ligne `YOUTUBE_COOKIE` dans votre fichier `.env` existant.
-
-### Méthode 2 : Obtenir les cookies manuellement
-
-1. Connectez-vous à YouTube dans votre navigateur.
-2. Ouvrez les outils de développement (F12 ou clic droit > Inspecter).
-3. Allez dans l'onglet "Application" > "Cookies" > "https://www.youtube.com".
-4. Copiez tous les cookies et leurs valeurs.
-5. Créez un fichier `.env` à la racine du projet avec le contenu suivant :
-   ```
-   YOUTUBE_COOKIE="cookie1=valeur1; cookie2=valeur2; ..."
-   ```
-
-### Méthode 3 : Utiliser une autre bibliothèque
-
-Si les méthodes ci-dessus ne fonctionnent pas, vous pouvez envisager d'utiliser une autre bibliothèque pour extraire les vidéos YouTube, comme `ytdl-core` ou `@distube/ytdl-core`.
+Si vous ne pouvez pas utiliser Lavalink, le bot peut fonctionner avec `ytdl-core` et `@distube/ytdl-core`, mais avec des fonctionnalités limitées :
+- Les playlists YouTube ne sont pas directement prises en charge
+- La recherche YouTube n'est pas supportée (il faut fournir une URL directe YouTube)
+- SoundCloud n'est pas pris en charge (YouTube uniquement)
 
 ## Commandes
 
-- `/play <query>` - Joue une chanson ou ajoute à la file d'attente
+- `/play <query>` - Joue une chanson ou ajoute à la file d'attente (URL ou recherche avec Lavalink)
 - `/pause` - Met en pause la chanson en cours
 - `/resume` - Reprend la lecture de la chanson en pause
 - `/skip` - Passe à la chanson suivante

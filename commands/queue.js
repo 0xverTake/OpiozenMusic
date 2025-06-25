@@ -7,70 +7,52 @@ module.exports = {
     .setDescription('Affiche la file d\'attente actuelle'),
   
   async execute(interaction) {
-    // Get the guild ID
-    const guildId = interaction.guildId;
-    
-    // Get the music player for this guild
-    const musicPlayer = interaction.client.musicQueue.get(guildId);
-    
-    if (!musicPlayer || (!musicPlayer.isPlaying && musicPlayer.queue.length === 0)) {
-      return interaction.reply({
-        content: '❌ Il n\'y a pas de musique dans la file d\'attente!',
-        ephemeral: true
-      });
-    }
-    
-    // Get the queue information
-    const queueInfo = musicPlayer.getQueue();
-    const { current, queue, loop, volume } = queueInfo;
-    
-    // Format the duration
-    const formatDuration = (seconds) => {
-      const minutes = Math.floor(seconds / 60);
-      const remainingSeconds = seconds % 60;
-      return `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
-    };
-    
-    // Create a response embed
-    const embed = new EmbedBuilder()
-      .setColor(embedColor)
-      .setTitle('🎵 File d\'attente')
-      .setFooter({ text: `ZenBeat - Volume: ${volume}% | Mode boucle: ${loop ? 'Activé' : 'Désactivé'}` })
-      .setTimestamp();
-    
-    // Add the current song
-    if (current) {
-      embed.addFields({
-        name: '▶️ En cours de lecture',
-        value: `[${current.title}](${current.url}) | \`${formatDuration(current.duration)}\` | Ajouté par: ${current.requestedBy}`
-      });
+    try {
+      const musicPlayer = interaction.client.musicPlayer;
+      const queueData = musicPlayer.getQueue(interaction.guildId);
       
-      // Add thumbnail if available
-      if (current.thumbnail) {
-        embed.setThumbnail(current.thumbnail);
+      if (!queueData || !queueData.current) {
+        await interaction.reply('❌ Il n\'y a pas de musique en cours de lecture!');
+        return;
       }
-    }
-    
-    // Add the queue
-    if (queue.length > 0) {
-      const queueList = queue.slice(0, 10).map((song, index) => {
-        return `${index + 1}. [${song.title}](${song.url}) | \`${formatDuration(song.duration)}\` | Ajouté par: ${song.requestedBy}`;
-      }).join('\n');
       
-      embed.addFields({
-        name: '📋 Prochaines chansons',
-        value: queueList
-      });
+      // Format the duration
+      const formatDuration = (ms) => {
+        const minutes = Math.floor(ms / 60000);
+        const seconds = ((ms % 60000) / 1000).toFixed(0);
+        return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+      };
       
-      // If there are more songs in the queue than we displayed
-      if (queue.length > 10) {
-        embed.addFields({
-          name: '📌 Et plus encore...',
-          value: `${queue.length - 10} autres chansons dans la file d'attente`
-        });
+      // Create the embed
+      const embed = new EmbedBuilder()
+        .setColor(embedColor)
+        .setTitle('🎵 File d\'attente')
+        .setDescription(`**Lecture en cours:** [${queueData.current.title}](${queueData.current.url})`)
+        .setFooter({ text: `ZenBeat - Mode boucle: ${queueData.loop ? 'Activé' : 'Désactivé'} | Volume: ${queueData.volume}%` })
+        .setTimestamp();
+      
+      // Add the queue to the embed
+      if (queueData.queue.length === 0) {
+        embed.addFields({ name: 'File d\'attente', value: 'Aucune chanson dans la file d\'attente.' });
+      } else {
+        let queueString = '';
+        
+        for (let i = 0; i < Math.min(queueData.queue.length, 10); i++) {
+          const song = queueData.queue[i];
+          queueString += `**${i + 1}.** [${song.title}](${song.url}) | \`${formatDuration(song.duration)}\` | <@${song.requestedBy}>\n`;
+        }
+        
+        if (queueData.queue.length > 10) {
+          queueString += `\n... et ${queueData.queue.length - 10} autres chansons`;
+        }
+        
+        embed.addFields({ name: 'File d\'attente', value: queueString });
       }
+      
+      await interaction.reply({ embeds: [embed] });
+    } catch (error) {
+      console.error(error);
+      await interaction.reply(`❌ Erreur: ${error.message}`);
     }
-    
-    return interaction.reply({ embeds: [embed] });
   },
 };

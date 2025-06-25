@@ -1,6 +1,7 @@
 const { Client, GatewayIntentBits, Collection, EmbedBuilder } = require('discord.js');
 const fs = require('node:fs');
 const path = require('node:path');
+const MusicPlayer = require('./utils/musicPlayerLavalink');
 
 // Load environment variables from .env file
 require('dotenv').config();
@@ -25,9 +26,11 @@ const client = new Client({
   ]
 });
 
-// Create collections for commands and the music queue
+// Create collections for commands
 client.commands = new Collection();
-client.musicQueue = new Map();
+
+// Initialize the Lavalink music player
+client.musicPlayer = new MusicPlayer(client);
 
 // Load command files
 const commandsPath = path.join(__dirname, 'commands');
