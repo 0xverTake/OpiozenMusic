@@ -5,18 +5,13 @@ const {
   AudioPlayerStatus,
   VoiceConnectionStatus,
   entersState,
-  NoSubscriberBehavior
+  NoSubscriberBehavior,
+  demuxProbe
 } = require('@discordjs/voice');
 const { EmbedBuilder } = require('discord.js');
-const play = require('play-dl');
+const ytdl = require('ytdl-core');
+const distube_ytdl = require('@distube/ytdl-core');
 const { embedColor } = require('../config.json');
-
-// Configure play-dl to handle YouTube's bot detection
-play.setToken({
-  youtube: {
-    cookie: process.env.YOUTUBE_COOKIE || ''
-  }
-});
 
 class MusicPlayer {
   constructor() {
@@ -112,182 +107,88 @@ class MusicPlayer {
             if (query.includes('list=')) {
               playlist = true;
               
-              // Add options to help bypass YouTube's bot detection
-              const playlistOptions = {
-                incomplete: true,
-                requestOptions: {
-                  headers: {
-                    // Add common browser headers to appear more like a regular user
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                    'Accept-Language': 'en-US,en;q=0.9',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
-                  }
-                }
-              };
+              // YouTube playlists are not directly supported by ytdl-core
+              // We would need to implement a custom solution or use another library for playlists
+              throw new Error('Les playlists YouTube ne sont pas prises en charge avec ytdl-core pour le moment.');
               
-              const playlistInfo = await play.playlist_info(query, playlistOptions);
-              
-              if (!playlistInfo) {
-                throw new Error('Impossible de récupérer les informations de la playlist. Vérifiez l\'URL et réessayez.');
-              }
-              
-              const videos = await playlistInfo.all_videos();
-              
-              if (!videos || videos.length === 0) {
-                throw new Error('Aucune vidéo trouvée dans cette playlist ou la playlist est privée.');
-              }
-              
-              for (const video of videos) {
-                if (video && video.title) {
-                  this.queue.push({
-                    title: video.title,
-                    url: video.url,
-                    thumbnail: video.thumbnails && video.thumbnails[0] ? video.thumbnails[0].url : null,
-                    duration: video.durationInSec || 0,
-                    requestedBy: interaction.user.tag
-                  });
-                }
-              }
-              
-              songInfo = {
-                title: playlistInfo.title || 'Playlist YouTube',
-                url: playlistInfo.url || query,
-                count: videos.length
-              };
             } else {
               // Single YouTube video
-              
-              // Add options to help bypass YouTube's bot detection
-              const videoOptions = {
-                requestOptions: {
-                  headers: {
-                    // Add common browser headers to appear more like a regular user
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                    'Accept-Language': 'en-US,en;q=0.9',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+              try {
+                // Try with @distube/ytdl-core first
+                const videoInfo = await distube_ytdl.getInfo(query, {
+                  requestOptions: {
+                    headers: {
+                      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                      'Accept-Language': 'en-US,en;q=0.9',
+                      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                      'Cookie': process.env.YOUTUBE_COOKIE || ''
+                    }
                   }
+                });
+                
+                if (!videoInfo || !videoInfo.videoDetails) {
+                  throw new Error('Impossible de récupérer les informations de la vidéo. Elle est peut-être privée ou restreinte.');
                 }
-              };
-              
-              const videoInfo = await play.video_info(query, videoOptions);
-              
-              if (!videoInfo || !videoInfo.video_details) {
-                throw new Error('Impossible de récupérer les informations de la vidéo. Elle est peut-être privée ou restreinte.');
+                
+                const video = videoInfo.videoDetails;
+                
+                songInfo = {
+                  title: video.title || 'Vidéo YouTube inconnue',
+                  url: video.video_url || query,
+                  thumbnail: video.thumbnails && video.thumbnails.length > 0 ? video.thumbnails[0].url : null,
+                  duration: parseInt(video.lengthSeconds) || 0,
+                  requestedBy: interaction.user.tag
+                };
+                
+                this.queue.push(songInfo);
+              } catch (distubeError) {
+                console.error('Erreur @distube/ytdl-core, utilisation de ytdl-core:', distubeError);
+                
+                // Fall back to regular ytdl-core
+                const videoInfo = await ytdl.getInfo(query, {
+                  requestOptions: {
+                    headers: {
+                      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                      'Accept-Language': 'en-US,en;q=0.9',
+                      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                      'Cookie': process.env.YOUTUBE_COOKIE || ''
+                    }
+                  }
+                });
+                
+                if (!videoInfo || !videoInfo.videoDetails) {
+                  throw new Error('Impossible de récupérer les informations de la vidéo. Elle est peut-être privée ou restreinte.');
+                }
+                
+                const video = videoInfo.videoDetails;
+                
+                songInfo = {
+                  title: video.title || 'Vidéo YouTube inconnue',
+                  url: video.video_url || query,
+                  thumbnail: video.thumbnails && video.thumbnails.length > 0 ? video.thumbnails[0].url : null,
+                  duration: parseInt(video.lengthSeconds) || 0,
+                  requestedBy: interaction.user.tag
+                };
+                
+                this.queue.push(songInfo);
               }
-              
-              const video = videoInfo.video_details;
-              
-              songInfo = {
-                title: video.title || 'Vidéo YouTube inconnue',
-                url: video.url || query,
-                thumbnail: video.thumbnails && video.thumbnails[0] ? video.thumbnails[0].url : null,
-                duration: video.durationInSec || 0,
-                requestedBy: interaction.user.tag
-              };
-              
-              this.queue.push(songInfo);
             }
           } catch (error) {
             console.error('Erreur YouTube:', error);
             throw new Error(`Erreur lors de l'extraction YouTube: ${error.message}`);
           }
         }
-        // Check if it's a SoundCloud URL
+        // SoundCloud is not supported with ytdl-core
         else if (query.includes('soundcloud.com')) {
-          try {
-            const soundcloudInfo = await play.soundcloud(query);
-            
-            if (!soundcloudInfo) {
-              throw new Error('Impossible de récupérer les informations SoundCloud. Vérifiez l\'URL et réessayez.');
-            }
-            
-            // Check if it's a playlist
-            if (soundcloudInfo.type === 'playlist') {
-              playlist = true;
-              
-              if (!soundcloudInfo.tracks || soundcloudInfo.tracks.length === 0) {
-                throw new Error('Aucune piste trouvée dans cette playlist SoundCloud.');
-              }
-              
-              const tracks = soundcloudInfo.tracks;
-              
-              for (const track of tracks) {
-                if (track && track.name) {
-                  this.queue.push({
-                    title: track.name || 'Piste SoundCloud inconnue',
-                    url: track.url || query,
-                    thumbnail: track.thumbnail || null,
-                    duration: track.durationInSec || 0,
-                    requestedBy: interaction.user.tag
-                  });
-                }
-              }
-              
-              songInfo = {
-                title: soundcloudInfo.name || 'Playlist SoundCloud',
-                url: query,
-                count: tracks.length
-              };
-            } else {
-              // Single SoundCloud track
-              songInfo = {
-                title: soundcloudInfo.name || 'Piste SoundCloud inconnue',
-                url: soundcloudInfo.url || query,
-                thumbnail: soundcloudInfo.thumbnail || null,
-                duration: soundcloudInfo.durationInSec || 0,
-                requestedBy: interaction.user.tag
-              };
-              
-              this.queue.push(songInfo);
-            }
-          } catch (error) {
-            console.error('Erreur SoundCloud:', error);
-            throw new Error(`Erreur lors de l'extraction SoundCloud: ${error.message}`);
-          }
+          throw new Error('SoundCloud n\'est pas pris en charge avec ytdl-core. Utilisez YouTube pour le moment.');
         } else {
-          throw new Error('URL non prise en charge. Utilisez YouTube ou SoundCloud.');
+          throw new Error('URL non prise en charge. Utilisez YouTube.');
         }
       } else {
         // Search YouTube for the query
-        try {
-          // Add options to help bypass YouTube's bot detection
-          const searchOptions = {
-            limit: 1,
-            requestOptions: {
-              headers: {
-                // Add common browser headers to appear more like a regular user
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
-              }
-            }
-          };
-          
-          const searchResults = await play.search(query, searchOptions);
-          
-          if (!searchResults || searchResults.length === 0) {
-            throw new Error('Aucun résultat trouvé pour cette recherche!');
-          }
-          
-          const video = searchResults[0];
-          
-          if (!video) {
-            throw new Error('Impossible de récupérer les informations de la vidéo.');
-          }
-          
-          songInfo = {
-            title: video.title || 'Vidéo inconnue',
-            url: video.url || '',
-            thumbnail: video.thumbnails && video.thumbnails[0] ? video.thumbnails[0].url : null,
-            duration: video.durationInSec || 0,
-            requestedBy: interaction.user.tag
-          };
-          
-          this.queue.push(songInfo);
-        } catch (error) {
-          console.error('Erreur de recherche:', error);
-          throw new Error(`Erreur lors de la recherche: ${error.message}`);
-        }
+        // ytdl-core doesn't support search, so we need to construct a YouTube search URL
+        const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+        throw new Error('La recherche YouTube n\'est pas prise en charge avec ytdl-core. Veuillez fournir une URL YouTube directe.');
       }
       
       // If nothing is currently playing, start playing
@@ -330,32 +231,55 @@ class MusicPlayer {
       }
       
       let stream;
+      let resource;
       
       // Get the audio stream based on the URL
       try {
         if (song.url.includes('youtube.com') || song.url.includes('youtu.be')) {
-          // Add options to help bypass YouTube's bot detection
-          const streamOptions = {
-            quality: 0, // Use highest quality available
-            discordPlayerCompatibility: true, // Enable compatibility mode
+          // Options for ytdl-core to help bypass YouTube's bot detection
+          const ytdlOptions = {
+            filter: 'audioonly',
+            quality: 'highestaudio',
+            highWaterMark: 1 << 25, // 32MB buffer
             requestOptions: {
               headers: {
                 // Add common browser headers to appear more like a regular user
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
                 'Accept-Language': 'en-US,en;q=0.9',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Cookie': process.env.YOUTUBE_COOKIE || ''
               }
             }
           };
           
-          stream = await play.stream(song.url, streamOptions);
-        } else if (song.url.includes('soundcloud.com')) {
-          stream = await play.stream(song.url);
+          try {
+            // Try with @distube/ytdl-core first
+            const ytStream = distube_ytdl(song.url, ytdlOptions);
+            const { stream: probeStream, type } = await demuxProbe(ytStream);
+            
+            // Create an audio resource from the stream
+            resource = createAudioResource(probeStream, {
+              inputType: type,
+              inlineVolume: true
+            });
+          } catch (distubeError) {
+            console.error(`@distube/ytdl-core error, falling back to ytdl-core: ${distubeError.message}`);
+            
+            // Fall back to regular ytdl-core
+            const ytStream = ytdl(song.url, ytdlOptions);
+            const { stream: probeStream, type } = await demuxProbe(ytStream);
+            
+            // Create an audio resource from the stream
+            resource = createAudioResource(probeStream, {
+              inputType: type,
+              inlineVolume: true
+            });
+          }
         } else {
           throw new Error('Format non pris en charge!');
         }
         
-        if (!stream || !stream.stream) {
+        if (!resource) {
           throw new Error('Impossible de créer le flux audio. La ressource est peut-être indisponible.');
         }
       } catch (streamError) {
@@ -365,12 +289,6 @@ class MusicPlayer {
         this.playNext();
         return;
       }
-      
-      // Create an audio resource from the stream
-      const resource = createAudioResource(stream.stream, {
-        inputType: stream.type,
-        inlineVolume: true
-      });
       
       // Set the volume
       resource.volume.setVolume(this.volume / 100);
