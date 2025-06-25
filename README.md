@@ -168,6 +168,7 @@ Si vous rencontrez des problèmes, consultez nos guides de dépannage :
 - [PM2_GUIDE.md](PM2_GUIDE.md) - Utilisation de PM2 pour l'hébergement
 - [PM2_LAVALINK_GUIDE.md](PM2_LAVALINK_GUIDE.md) - Configuration de PM2 avec Lavalink
 - [HOSTING_GUIDE.md](hosting-guide.md) - Guide d'hébergement sur VPS
+- [UPDATE_GUIDE.md](UPDATE_GUIDE.md) - Comment mettre à jour le bot sur un VPS
 - [LAVALINK_V4_UPDATE.md](LAVALINK_V4_UPDATE.md) - Mise à jour vers Lavalink v4
 - [SHOUKAKU_V4_API_FIX.md](SHOUKAKU_V4_API_FIX.md) - Correction de l'erreur "node.joinChannel is not a function"
 
