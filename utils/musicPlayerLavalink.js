@@ -121,6 +121,25 @@ class MusicPlayer {
     });
   }
 
+  // Get a node from Shoukaku
+  getNode() {
+    try {
+      // Get the first available node using the nodes Map
+      const nodes = Array.from(this.shoukaku.nodes.values());
+      const availableNode = nodes.find(node => node.state === 1) || nodes[0];
+      
+      if (!availableNode) {
+        logDebug("❌ Erreur: No available nodes found in the nodes Map");
+        throw new Error("No available nodes");
+      }
+      
+      return availableNode;
+    } catch (error) {
+      logDebug(`❌ Erreur lors de la récupération d'un nœud: ${error.message}`);
+      throw error;
+    }
+  }
+
   // Get or create a player for a guild
   async getPlayer(guildId) {
     return this.players.get(guildId);
@@ -154,7 +173,7 @@ class MusicPlayer {
     
     try {
       // Get the node
-      const node = this.shoukaku.getNode();
+      const node = this.getNode();
       if (!node) throw new Error("No available nodes");
       
       // Create a player
@@ -270,7 +289,7 @@ class MusicPlayer {
     
     try {
       // Vérifier si des nœuds sont disponibles
-      const node = this.shoukaku.getNode();
+      const node = this.getNode();
       if (!node) {
         logDebug("❌ Erreur: No available nodes");
         throw new Error("No available nodes");
