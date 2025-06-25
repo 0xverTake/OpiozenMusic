@@ -13,7 +13,7 @@ TypeError: node.joinChannel is not a function
 
 ## Cause
 
-Cette erreur était due à un changement d'API dans la bibliothèque Shoukaku v4.1.1. La méthode `joinChannel` n'existe pas dans cette version, elle a été remplacée par `joinVoiceChannel`.
+Cette erreur était due à un changement d'API dans la bibliothèque Shoukaku v4.1.1. La méthode `joinChannel` n'existe pas dans cette version. De plus, la méthode pour rejoindre un canal vocal n'est pas disponible sur l'objet `node` mais directement sur l'instance de `Shoukaku` elle-même, sous le nom de `joinVoiceChannel`.
 
 ## Solution
 
@@ -31,11 +31,12 @@ const player = await node.joinChannel({
 });
 
 // Après (code corrigé)
-const player = await node.joinVoiceChannel({
+const player = await this.shoukaku.joinVoiceChannel({
   guildId: interaction.guild.id,
   channelId: channel.id,
   shardId: interaction.guild.shardId || 0,
-  deaf: true
+  deaf: true,
+  node: node.name // Spécifier quel nœud utiliser
 });
 ```
 
@@ -50,5 +51,16 @@ Pour vérifier que la correction fonctionne :
 ## Informations supplémentaires
 
 - Cette correction est spécifique à Shoukaku v4.1.1
+- Dans Shoukaku v4, la méthode pour rejoindre un canal vocal est disponible sur l'instance principale de Shoukaku, pas sur les nœuds individuels
+- L'API correcte pour rejoindre un canal vocal est :
+  ```javascript
+  shoukaku.joinVoiceChannel({
+    guildId: "ID_DU_SERVEUR",
+    channelId: "ID_DU_CANAL",
+    shardId: 0,
+    deaf: true,
+    node: "NOM_DU_NOEUD" // Optionnel, spécifie quel nœud utiliser
+  });
+  ```
 - Si vous mettez à jour Shoukaku vers une version ultérieure, vérifiez la documentation pour vous assurer que l'API n'a pas changé à nouveau
 - Pour plus d'informations sur l'API de Shoukaku, consultez la documentation officielle : https://github.com/Deivu/Shoukaku

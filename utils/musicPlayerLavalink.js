@@ -177,11 +177,13 @@ class MusicPlayer {
       if (!node) throw new Error("No available nodes");
       
       // Create a player - using the correct API for Shoukaku v4
-      const player = await node.joinVoiceChannel({
+      // La méthode joinVoiceChannel est sur l'instance de Shoukaku, pas sur le nœud
+      const player = await this.shoukaku.joinVoiceChannel({
         guildId: interaction.guild.id,
         channelId: channel.id,
         shardId: interaction.guild.shardId || 0,
-        deaf: true
+        deaf: true,
+        node: node.name // Spécifier quel nœud utiliser
       });
       
       // Store the player and create a queue
